@@ -1,19 +1,12 @@
-from typing import Any
-import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import lightning as L
 import pytorch_lightning as pl
 from torch.utils.data import TensorDataset, DataLoader
-from torch.optim import SGD
-import seaborn as sns
-import matplotlib.pyplot as plt
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from ray.train.torch import TorchTrainer
-from ray.train import ScalingConfig,ScalingC, CheckpointConfig
+from ray.train import ScalingConfig, CheckpointConfig
 import ray.train.lightning
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
@@ -74,18 +67,3 @@ scaling_config = ScalingConfig(num_workers=2, use_gpu=False)
 trainer = TorchTrainer(train_func, scaling_config=scaling_config)
 result = trainer.fit()
 
-# Ray Tune
-
-search_space = {
-    'l1_size':tune.choice([2,4,8]),
-    'l2_size':tune.choice([2,4,8])
-}
-num_epochs = 4
-num_samples = 6
-scheduler = ASHAScheduler(max_t=num_epochs, grace_period=1, reduction_factor=2)
-
-# model = BasicLightning()
-# model = model.to(device)
-# trainer = L.Trainer(max_epochs=1000,accelerator="auto",default_root_dir="/home/daniel/Documents/Development/Logging",callbacks=[EarlyStopping(monitor="train_loss", min_delta=0.0, patience=3, verbose=True, mode="min")])
-# print(dataset.tensors)
-# trainer.fit(model,dataloader)
