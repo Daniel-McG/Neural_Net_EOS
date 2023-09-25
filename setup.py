@@ -58,6 +58,18 @@ class lightning_with_ray_mods(L.LightningModule):
           nn.Linear(self.l2_size,1),
           nn.Tanh()
         )
+    def forward(self,x):
+        out = self.s1(x)
+        return out
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(),lr = 0.001 )
+    def training_step(self,batch,batch_index):
+        input_i,target_i = batch
+        output_i = self.forward(input_i)
+        # target_i = torch.unsqueeze(target_i,1)
+        loss = (output_i-target_i)**2
+        self.log("train_loss",loss)
+        return {'loss': loss}
 
         
 
