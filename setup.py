@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 import pandas as pd
 import torch
@@ -44,7 +45,23 @@ class BasicLightning(L.LightningModule):
         self.log("train_loss",loss)
         return {'loss': loss}
 
+class lightning_with_ray_mods(L.LightningModule):
+    def __init__(self,config):
+        super(lightning_with_ray_mods,self).__init__()
+        self.l1_size = config['l1_size']
+        self.l2_size = config['l2_size']
+        self.s1 = nn.Sequential(
+          nn.Linear(1,self.l1_size),
+          nn.Tanh(),
+          nn.Linear(self.l1_size,self.l2_size),
+          nn.Tanh(),
+          nn.Linear(self.l2_size,1),
+          nn.Tanh()
+        )
+
         
+
+
 
 model = BasicLightning()
 model = model.to(device)
