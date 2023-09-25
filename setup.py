@@ -48,6 +48,6 @@ class BasicLightning(L.LightningModule):
 
 model = BasicLightning()
 model = model.to(device)
-trainer = L.Trainer(max_epochs=1000,accelerator="gpu",default_root_dir="/home/daniel/Documents/Development/Logging",callbacks=[EarlyStopping(monitor="train_loss", min_delta=0.0, patience=3, verbose=True, mode="min")])
+trainer = L.Trainer(max_epochs=1000,accelerator="auto",default_root_dir="/home/daniel/Documents/Development/Logging",callbacks=[EarlyStopping(monitor="train_loss", min_delta=0.0, patience=3, verbose=True, mode="min")])
 print(dataset.tensors)
 trainer.fit(model,dataloader)
