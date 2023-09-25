@@ -13,8 +13,10 @@ import matplotlib.pyplot as plt
 from lightning.pytorch.loggers import TensorBoardLogger
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from ray.train.torch import TorchTrainer
-from ray.train import ScalingConfig
+from ray.train import ScalingConfig,ScalingC, CheckpointConfig
 import ray.train.lightning
+from ray import tune
+from ray.tune.schedulers import ASHAScheduler
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -44,6 +46,7 @@ class BasicLightning(pl.LightningModule):
         return {'loss': loss}
 
 
+
 def train_func(config):
     # Create and load data into dataoader
     inputs = torch.tensor([0.,0.25, 0.5,0.75, 1.] * 10000)
@@ -71,8 +74,15 @@ scaling_config = ScalingConfig(num_workers=2, use_gpu=False)
 trainer = TorchTrainer(train_func, scaling_config=scaling_config)
 result = trainer.fit()
 
+# Ray Tune
 
-
+search_space = {
+    'l1_size':tune.choice([2,4,8]),
+    'l2_size':tune.choice([2,4,8])
+}
+num_epochs = 4
+num_samples = 6
+scheduler = ASHAScheduler(max_t=num_epochs, grace_period=1, reduction_factor=2)
 
 # model = BasicLightning()
 # model = model.to(device)
