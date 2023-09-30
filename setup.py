@@ -35,15 +35,20 @@ class BasicLightning(pl.LightningModule):
         return out
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(),lr = 0.001 )
-    def training_step(self,batch,batch_index):
+    def training_step(self,train_batch,batch_index):
 
-        input_i,target_i = batch            #Unpacking data from a batch
+        input_i,target_i = train_batch            #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
         loss = (output_i-target_i)**2       #Calculating loss
         self.log("train_loss",loss)         #Logging the training loss
         return {'loss': loss}
-
-
+    
+    def validation_step(self, val_batch, batch_idx):
+        val_input_i, val_target_i = val_batch
+        val_output_i = self.forward(val_input_i)
+        loss = (val_output_i-val_target_i)**2
+        self.log("validation_loss",loss) 
+        return {"val_loss": loss}
 
 def train_func(config):
     # Create and load data into dataoader
@@ -53,7 +58,7 @@ def train_func(config):
     labels = labels.to(device)
     dataset = TensorDataset(inputs,labels)
     train_dataloader = DataLoader(dataset)
-    
+    val_dataloader = DataLoader(dataset)
     model = BasicLightning()
     trainer = pl.Trainer(
         max_epochs=10,
@@ -64,10 +69,10 @@ def train_func(config):
         callbacks=[ray.train.lightning.RayTrainReportCallback()],
     )
     trainer = ray.train.lightning.prepare_trainer(trainer)
-    trainer.fit(model, train_dataloaders=train_dataloader)
+    trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=2, use_gpu=False)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 
 trainer = TorchTrainer(train_func, scaling_config=scaling_config)
 result = trainer.fit()
