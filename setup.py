@@ -20,7 +20,7 @@ class BasicLightning(pl.LightningModule):
     def __init__(self):
         super(BasicLightning,self).__init__() 
 
-        # Creating a sequential stack of Linear layers with Tanh activation functions 
+        # Creating a sequential stack of Linear layers with Tanh activation function 
 
         self.s1 = nn.Sequential(
           nn.Linear(1,2),
