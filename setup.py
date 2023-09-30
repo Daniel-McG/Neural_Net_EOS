@@ -14,9 +14,14 @@ logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+#Defining the neural network
+
 class BasicLightning(pl.LightningModule):
     def __init__(self):
         super(BasicLightning,self).__init__() 
+
+        # Creating a sequential stack of Linear layers with Tanh activation functions 
+
         self.s1 = nn.Sequential(
           nn.Linear(1,2),
           nn.Tanh(),
@@ -31,11 +36,11 @@ class BasicLightning(pl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(),lr = 0.001 )
     def training_step(self,batch,batch_index):
-        input_i,target_i = batch
-        output_i = self.forward(input_i)
-        # target_i = torch.unsqueeze(target_i,1)
-        loss = (output_i-target_i)**2
-        self.log("train_loss",loss)
+
+        input_i,target_i = batch            #Unpacking data from a batch
+        output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
+        loss = (output_i-target_i)**2       #Calculating loss
+        self.log("train_loss",loss)         #Logging the training loss
         return {'loss': loss}
 
 
