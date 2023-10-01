@@ -1,4 +1,5 @@
 import torch
+import pandas as pd
 import torch.nn as nn
 import lightning as L
 import pytorch_lightning as pl
@@ -23,11 +24,11 @@ class BasicLightning(pl.LightningModule):
         # Creating a sequential stack of Linear layers with Tanh activation function 
 
         self.s1 = nn.Sequential(
-          nn.Linear(1,2),
+          nn.Linear(2,2),
           nn.Tanh(),
           nn.Linear(2,2),
           nn.Tanh(),
-          nn.Linear(2,1),
+          nn.Linear(2,2),
           nn.Tanh()
         )
     def forward(self,x):
@@ -40,28 +41,40 @@ class BasicLightning(pl.LightningModule):
         input_i,target_i = train_batch            #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
         loss = (output_i-target_i)**2       #Calculating loss
-        self.log("train_loss",loss)         #Logging the training loss
-        return {'loss': loss}
+        mean_loss = torch.mean(loss)
+        print(mean_loss)
+        self.log("train_loss",mean_loss)         #Logging the training loss
+        return {'loss': mean_loss}
     
     def validation_step(self, val_batch, batch_idx):
         val_input_i, val_target_i = val_batch
         val_output_i = self.forward(val_input_i)
         loss = (val_output_i-val_target_i)**2
-        self.log("validation_loss",loss) 
-        return {"val_loss": loss}
+        mean_loss = torch.mean(loss)
+        self.log("validation_loss",mean_loss) 
+        return {"val_loss": mean_loss}
 
 def train_func(config):
+    # Read data from csv
+    data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv')
     # Create and load data into dataoader
-    inputs = torch.tensor([0.,0.25, 0.5,0.75, 1.] * 10000)
-    labels = torch.tensor([0.,0.5, 1.,0.5, 0.] * 10000)
-    inputs = inputs.to(device)
-    labels = labels.to(device)
-    dataset = TensorDataset(inputs,labels)
+    data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
+    input_df = data_df[['rho','T']]
+    target_df = data_df[['P','U']]
+    input_values = input_df.values
+    target_values= target_df.values
+    input_tensor = torch.tensor(input_values)
+    target_tensor = torch.tensor(target_values)
+    input_tensor = input_tensor.float()
+    target_tensor = target_tensor.float()
+    input_tensor = input_tensor.to(device)
+    target_tensor = target_tensor.to(device)
+    dataset = TensorDataset(input_tensor,target_tensor)
     train_dataloader = DataLoader(dataset)
     val_dataloader = DataLoader(dataset)
     model = BasicLightning()
     trainer = pl.Trainer(
-        max_epochs=10,
+        max_epochs=100000,
         devices="auto",
         accelerator="auto",
         strategy=ray.train.lightning.RayDDPStrategy(),
