@@ -44,14 +44,14 @@ class BasicLightning(pl.LightningModule):
         mean_loss = torch.mean(loss)
         print(mean_loss)
         self.log("train_loss",mean_loss)         #Logging the training loss
-        return {'loss': mean_loss}
+        return {'train_loss': mean_loss}
     
     def validation_step(self, val_batch, batch_idx):
         val_input_i, val_target_i = val_batch
         val_output_i = self.forward(val_input_i)
         loss = (val_output_i-val_target_i)**2
         mean_loss = torch.mean(loss)
-        self.log("validation_loss",mean_loss) 
+        self.log("val_loss",mean_loss) 
         return {"val_loss": mean_loss}
 
 def train_func(config):
@@ -69,9 +69,16 @@ def train_func(config):
     target_tensor = target_tensor.float()
     input_tensor = input_tensor.to(device)
     target_tensor = target_tensor.to(device)
+
     dataset = TensorDataset(input_tensor,target_tensor)
-    train_dataloader = DataLoader(dataset)
-    val_dataloader = DataLoader(dataset)
+
+    train_tensor_size = int(len(input_tensor) * 0.8)
+    val_tensor_size = len(input_tensor) - train_tensor_size
+    seed = torch.Generator().manual_seed(584)
+    train_set, val_set = torch.utils.data.random_split(dataset, [train_tensor_size, val_tensor_size], generator=seed)
+
+    train_dataloader = DataLoader(train_set)
+    val_dataloader = DataLoader(val_set)
     model = BasicLightning()
     trainer = pl.Trainer(
         max_epochs=100000,
