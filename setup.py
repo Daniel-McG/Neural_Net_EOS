@@ -36,14 +36,17 @@ class BasicLightning(pl.LightningModule):
         out = self.s1(x)
         return out
     def configure_optimizers(self):
-        return torch.optim.SGD(self.parameters(),lr = 0.000001 )
+        return torch.optim.Adam(self.parameters(),lr = 0.0001 )
     def training_step(self,train_batch,batch_index):
         input_i,target_i = train_batch            #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
         loss = (output_i-target_i)**2       #Calculating loss
         mean_loss = torch.mean(loss)
+        # self.log("input",input_i)
+        # self.log("target",target_i)
+        # self.log("output",output_i)
         self.log("train_loss",mean_loss)         #Logging the training loss
-        return {'loss': mean_loss}
+        return {"loss": mean_loss}
     def validation_step(self, val_batch, batch_idx):
         val_input_i, val_target_i = val_batch
         val_output_i = self.forward(val_input_i)
@@ -55,7 +58,7 @@ class BasicLightning(pl.LightningModule):
 def train_func(config):
     # Read data from csv
     data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
-    train_df,test_df = train_test_split(data_df,train_size=0.7)
+    train_df,test_df = train_test_split(data_df,train_size=0.9)
     scaler = MinMaxScaler(feature_range =(0,1))
     train_arr= scaler.fit_transform(train_df)
     val_arr = scaler.transform(test_df)
@@ -106,4 +109,5 @@ scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 
 trainer = TorchTrainer(train_func, scaling_config=scaling_config)
 result = trainer.fit()
+
 
