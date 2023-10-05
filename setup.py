@@ -34,11 +34,14 @@ class BasicLightning(pl.LightningModule):
           nn.Linear(4,2),
           nn.Tanh()
         )
+
     def forward(self,x):
         out = self.s1(x)
         return out
+    
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(),lr = 0.000001 )
+    
     def training_step(self,train_batch,batch_index):
         input_i,target_i = train_batch            #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
@@ -46,6 +49,7 @@ class BasicLightning(pl.LightningModule):
         mean_loss = torch.mean(loss)
         self.log("train_loss",mean_loss)         #Logging the training loss
         return {"loss": mean_loss}
+    
     def validation_step(self, val_batch, batch_idx):
         val_input_i, val_target_i = val_batch
         val_output_i = self.forward(val_input_i)
@@ -63,6 +67,8 @@ def train_func(config):
     scaler = MinMaxScaler(feature_range =(0,1))
     train_arr= scaler.fit_transform(train_df)
     val_arr = scaler.transform(test_df)
+
+    #Plotting distribution of train and test data
     for column in range(0,4,1):
         plt.clf()
         train_histplot = sns.histplot(data = train_arr[:,column])
@@ -74,6 +80,7 @@ def train_func(config):
         val_histplot = sns.histplot(data = val_arr[:,column])
         val_fig = val_histplot.get_figure()
         val_fig.savefig("/home/daniel/Pictures/BS_32_val_col{}.png".format(str(column)))
+
     #Splitting the preprocessed data into the inputs and targets
     train_inputs = torch.tensor(train_arr[:,[0,1]])
     train_targets = torch.tensor(train_arr[:,[2,3]])
@@ -84,6 +91,7 @@ def train_func(config):
     val_inputs = val_inputs.float()
     val_targets = val_targets.float()
     print(train_inputs)
+
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
@@ -97,6 +105,7 @@ def train_func(config):
         strategy=ray.train.lightning.RayDDPStrategy(),
         plugins=[ray.train.lightning.RayLightningEnvironment()]
     )
+    
     trainer = ray.train.lightning.prepare_trainer(trainer)
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
