@@ -336,12 +336,6 @@ plots.scatter(triple_x,triple_y,marker = '^',edgecolor='b',s=100)
 plt.plot(0.766577,0.399923)
 plt.show()
 # In[ ]:
-
-
-liq_vle_density = np.concatenate((critical_point_density,density_liq,density_liq2))
-liq_vle_temp = np.concatenate((critical_point_temperature,T_gl,T_vl))
-
-
 vle_liq_df = pd.DataFrame({
     'Densities' : liq_vle_density,
     'Temperatures' : liq_vle_temp})
