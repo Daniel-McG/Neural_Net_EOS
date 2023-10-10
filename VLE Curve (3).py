@@ -41,16 +41,9 @@ T_gl = np.array([0.450,0.460,0.470,0.480,0.490,0.495,0.500,0.505,0.515])
 density_gas = np.array([0.030, 0.036, 0.05, 0.053, 0.064, 0.07, 0.09, 0.09, 0.28])
 density_liq = np.array([0.722,0.72,0.70,0.68,0.65,0.65,0.65,0.64,0.43])
 
-
-# In[174]:
-
-
 T_vl = np.array([0.415,0.425,0.435,0.445,0.450,0.455,0.460,0.465,0.468])
 density_gas2 = np.array([0.0163,0.0173,0.0235,0.0274,0.0285,0.0339,0.0406,0.0473,0.0420])
 density_liq2 = np.array([0.763,0.757,0.738,0.725,0.712,0.706,0.698,0.695,0.603])
-
-
-# In[175]:
 
 plt.clf()
 fig = plt.figure()
@@ -64,11 +57,6 @@ ax.plot(density_gas2,T_vl,'m')
 ax.plot(density_liq2,T_vl,'d')
 ax.scatter(critical_point_density,critical_point_temperature)
 plt.show()
-
-# new
-
-# In[176]:
-
 
 x_data_ordered = np.concatenate((density_gas2,density_gas,density_liq,density_s,density_f))
 y_data_ordered = np.concatenate((T_vl,T_gl,T_gl,T_sf,T_sf))
