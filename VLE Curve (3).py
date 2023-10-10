@@ -116,15 +116,6 @@ vle_gas_tem = vle_gas_df_sorted['Temperatures'].to_numpy()
 #plt.plot(generic_x_data1,pchip)
 #print(vle_gas_tem)
 
-
-# In[180]:
-
-plt.clf()
-spline = scipy.interpolate.UnivariateSpline(vle_gas_den,vle_gas_tem,k=3)
-spline.set_smoothing_factor(0.000001)
-plt.plot(generic_x_data1,spline(generic_x_data1))
-plt.show()
-
 # In[181]:
 
 plt.clf()
