@@ -95,9 +95,9 @@ gas_vle_temperature = np.concatenate((T_vl,T_gl,critical_point_temperature))
 gas_fit = np.polyfit(gas_vle_density,gas_vle_temperature,4)
 gas_curve_function = np.poly1d(gas_fit)
 
-generic_x_data1 = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
+gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
 #generic_x_data2 = np.linspace(min(),max(),100)
-gas_vle_curve, = plt.plot(generic_x_data1,gas_curve_function(generic_x_data1))
+gas_vle_curve, = plt.plot(gas_density_range,gas_curve_function(gas_density_range))
 sns.scatterplot(x = gas_vle_density,y = gas_vle_temperature)
 plt.show()
 
@@ -112,9 +112,6 @@ vle_gas_df_sorted = vle_gas_df.sort_values(by=['Densities'])
 vle_gas_den = vle_gas_df_sorted['Densities'].to_numpy()
 vle_gas_tem = vle_gas_df_sorted['Temperatures'].to_numpy()
 
-#pchip = scipy.interpolate.pchip_interpolate(vle_gas_den,vle_gas_tem,generic_x_data1)
-#plt.plot(generic_x_data1,pchip)
-#print(vle_gas_tem)
 
 # In[181]:
 
@@ -123,7 +120,7 @@ def vapor_curve(x,a,b,c,d):
     return a*np.arctan(b*x-c)+d
 
 popt1,pcov1 = curve_fit(vapor_curve,vle_gas_den,vle_gas_tem,maxfev = 100000000)
-plt.plot(generic_x_data1,vapor_curve(generic_x_data1,*popt1),'b')
+plt.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
 sns.scatterplot(x=vle_gas_den,y=vle_gas_tem)
 plt.show()
 
@@ -318,7 +315,7 @@ np.concatenate((triple_x,triple_y))
 plt.clf()
 semi_final_fig = plt.figure()
 semi_final_fig, plots = plt.subplots()
-plots.plot(generic_x_data1,vapor_curve(generic_x_data1,*popt1),'b')
+plots.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
 plots.plot(generic_x_data2,liquid_curve(generic_x_data2,*popt2),'r')
 plots.plot(generic_x_data4,solid_curve(generic_x_data4,*popt4),'y')
 plots.scatter(vle_densities,vle_temperatures)
@@ -355,7 +352,7 @@ plt.clf()
 #gas phase VLE
 final_fig = plt.figure()
 final_fig, phase_plot = plt.subplots()
-phase_plot.plot(generic_x_data1,vapor_curve(generic_x_data1,*popt1),'b')
+phase_plot.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
 plt.show()
 #liq phase VLE
 critical_density = 0.366
