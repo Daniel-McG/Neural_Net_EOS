@@ -65,8 +65,8 @@ y_data_ordered = np.concatenate((T_vl,T_gl,T_gl,T_sf,T_sf))
 # In[217]:
 
 
-liq_vle_density = np.concatenate((critical_point_density,density_liq,density_liq2,dens_coexistence_liq))
-liq_vle_temp = np.concatenate((critical_point_temperature,T_gl,T_vl,coexistence_temp))
+liq_vle_density = np.concatenate((critical_point_density,density_liq,density_liq2))
+liq_vle_temp = np.concatenate((critical_point_temperature,T_gl,T_vl))
 
 
 vle_liq_df = pd.DataFrame({
@@ -90,8 +90,8 @@ plt.show()
 # In[178]:
 
 plt.clf()
-gas_vle_density = np.concatenate((density_gas2,density_gas,critical_point_density,dens_coexistence_gas))
-gas_vle_temperature = np.concatenate((T_vl,T_gl,critical_point_temperature,coexistence_temp))
+gas_vle_density = np.concatenate((density_gas2,density_gas,critical_point_density))
+gas_vle_temperature = np.concatenate((T_vl,T_gl,critical_point_temperature))
 gas_fit = np.polyfit(gas_vle_density,gas_vle_temperature,4)
 gas_curve_function = np.poly1d(gas_fit)
 
@@ -338,8 +338,8 @@ plt.show()
 # In[ ]:
 
 
-liq_vle_density = np.concatenate((critical_point_density,density_liq,density_liq2,dens_coexistence_liq))
-liq_vle_temp = np.concatenate((critical_point_temperature,T_gl,T_vl,coexistence_temp))
+liq_vle_density = np.concatenate((critical_point_density,density_liq,density_liq2))
+liq_vle_temp = np.concatenate((critical_point_temperature,T_gl,T_vl))
 
 
 vle_liq_df = pd.DataFrame({
