@@ -12,6 +12,9 @@ import math
 import scipy
 # In[168]:
 include_2019_data = False
+triple_point_tolerance = 1*10**(-10)
+desired_number_of_sobol_points = 1500
+############# instantiating data ###########
 
 vle_temp_2019_data = np.array([0.4,0.41,0.42,0.43,0.44])
 inverse_gas_density_2019_data = np.array([35.40806914,28.16798258,21.91249159,16.245217,11.06553708])
@@ -34,28 +37,10 @@ T_vl = np.array([0.415,0.425,0.435,0.445,0.450,0.455,0.460,0.465,0.468])
 density_gas2 = np.array([0.0163,0.0173,0.0235,0.0274,0.0285,0.0339,0.0406,0.0473,0.0420])
 density_liq2 = np.array([0.763,0.757,0.738,0.725,0.712,0.706,0.698,0.695,0.603])
 
-
-y = T_sf
-# fig, ax = plt.subplots()
-# ax.plot(density_f,T_sf,'y')
-# ax.plot(density_s,T_sf,'g')
-# ax.plot(density_gas,T_gl,'r')
-# ax.plot(density_liq,T_gl,'c')
-# ax.plot(density_gas2,T_vl,'m')
-# ax.plot(density_liq2,T_vl,'d')
-# ax.scatter(critical_point_density,critical_point_temperature)
-# plt.show()
-
-# desnity_ordered = np.concatenate((density_gas2,density_gas,density_liq,density_s,density_f))
-# temperature_ordered = np.concatenate((T_vl,T_gl,T_gl,T_sf,T_sf))
-
-
-# In[217]:
-
-
 liq_vle_density = np.concatenate((critical_point_density,density_liq,density_liq2))
 liq_vle_temp = np.concatenate((critical_point_temperature,T_gl,T_vl))
-
+gas_vle_density = np.concatenate((density_gas2,density_gas,critical_point_density))
+gas_vle_temperature = np.concatenate((T_vl,T_gl,critical_point_temperature))
 
 vle_liq_df = pd.DataFrame({
     'Densities' : liq_vle_density,
@@ -65,25 +50,6 @@ vle_liq_df_sorted
 vle_liq_den = vle_liq_df_sorted['Densities'].to_numpy()
 vle_liq_tem = vle_liq_df_sorted['Temperatures'].to_numpy()
 
-liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
-
-def liquid_curve(x,a,b,c):
-    return a*np.arctan(b*x-c)
-plt.clf()
-popt2,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
-
-
-# In[178]:
-
-gas_vle_density = np.concatenate((density_gas2,density_gas,critical_point_density))
-gas_vle_temperature = np.concatenate((T_vl,T_gl,critical_point_temperature))
-
-gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
-
-
-# In[179]:
-
-
 vle_gas_df = pd.DataFrame({
     'Densities' : gas_vle_density,
     'Temperatures' : gas_vle_temperature})
@@ -91,144 +57,32 @@ vle_gas_df_sorted = vle_gas_df.sort_values(by=['Densities'])
 vle_gas_den = vle_gas_df_sorted['Densities'].to_numpy()
 vle_gas_tem = vle_gas_df_sorted['Temperatures'].to_numpy()
 
-
-
-# In[181]:
-def vapor_curve(x,a,b,c,d):
-    return a*np.arctan(b*x-c)+d
-popt1,pcov1 = curve_fit(vapor_curve,vle_gas_den,vle_gas_tem,maxfev = 100000000)
-
-# In[182]:
-
-
-# desnity_ordered = np.concatenate((density_gas2,density_gas,density_liq,density_f))
-# temperature_ordered = np.concatenate((T_vl,T_gl,T_gl,T_sf))
-
-
-# In[184]:
-
-
-# df = pd.DataFrame({'Densities' : desnity_ordered,
-#                     'Temperatures' : temperature_ordered})
-# df1 = df.sort_values(by=['Densities'])
-
-# densities = df1['Densities'].to_numpy()
-# temperatures = df1['Temperatures'].to_numpy()
-
-
-# # In[19]:
-
-
-# df1
-
-
-# In[185]:
-
-# plt.clf()
-# x_ordered = np.linspace(0,1,num = 100)
-# x_ordered
-# #plt.plot(x,np.poly1d(a)(x))
-# fit_params = np.polyfit(densities,temperatures,8)
-# curve_function = np.poly1d(fit_params)
-# lj_vle_curve, = plt.plot(x_ordered,curve_function(x_ordered))
-
-# plt.ylim(0,1)
-# plt.xlim(0,1)
-# sns.scatterplot(x=densities,y=temperatures)
-# plt.xlabel('Density')
-# plt.ylabel('Temperature')
-# plt.title('2D LJ VLE Curve')
-# sns.scatterplot(x=critical_point_density,y=critical_point_temperature)
-# plt.show()
-
-
-# In[186]:
-
-
-# x_data = lj_vle_curve.get_xdata()
-# y_data = lj_vle_curve.get_ydata()
-# x_data, y_data
-
-
-# # In[22]:
-
-# plt.clf()
-# fig3 = plt.plot(x_data,y_data)
-# plt.ylim(0,1)
-# plt.show()
-
-# In[187]:
-
-
-# y_data_incremented = []
-# y_data_copy = y_data
-
-# for i in range(0,99,1):
-#     y_data = y_data + 0.1
-#     y_data_incremented.append(y_data)
-
-# y_data_incremented.insert(0,y_data_copy)
-# len(y_data_incremented)
-    
-
-
-# # In[188]:
-
-
-# x_data_incremented = []
-# for j in range (0,100,1):
-#     x_data_incremented.append(x_data)
-    
-# len(x_data_incremented)
-
-
-# # In[189]:
-
-# plt.clf()
-# plt.scatter(x_data_incremented,y_data_incremented,s=0.01)
-# plt.show()
-
-# In[190]:
-
-
-
-
-# In[191]:
-
-# plt.clf()
 vle_densities = np.concatenate([vle_gas_den,vle_liq_den])
 vle_temperatures = np.concatenate([vle_gas_tem,vle_liq_tem])
-# plt.plot(vle_densities,vle_temperatures)
 
-# def func3(x,a,b,c,d):
-#     return a*x**3 + b*x**2 + c*x + d
+liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
+gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
+solid_density_range = np.linspace(max(vle_liq_den),max(density_f),10000)
 
-# generic_x_data3 = np.linspace(min(vle_densities),max(vle_densities),1000)
+######## Fitting Curves ########
 
-# popt3,pcov3 = curve_fit(func3,vle_densities,vle_temperatures,maxfev = 100000000)
-# plt.plot(generic_x_data3,func3(generic_x_data3,*popt3),'r')
-# sns.scatterplot(x = vle_densities,y=vle_temperatures)
-# plt.show()
+def liquid_curve(x,a,b,c):
+    return a*np.arctan(b*x-c)
+liquid_curve_parameters,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
 
-# In[192]:
+def vapour_curve(x,a,b,c,d):
+    return a*np.arctan(b*x-c)+d
+vapour_curve_parameters,pcov1 = curve_fit(vapour_curve,vle_gas_den,vle_gas_tem,maxfev = 100000000)
 
-plt.clf()
-plt.plot(density_f,T_sf)
 def solid_curve(x,a,b,c):
     return a*np.exp(b*x)+c
-
-solid_density_range = np.linspace(max(vle_liq_den),max(density_f),10000)
-popt4,pcov4 = curve_fit(solid_curve,density_f,T_sf,maxfev = 100000000)
-plt.plot(solid_density_range,solid_curve(solid_density_range,*popt4),'r')
-sns.scatterplot(x=density_f,y=T_sf)
-plt.show()
-
+solid_curve_parameters,pcov4 = curve_fit(solid_curve,density_f,T_sf,maxfev = 100000000)
 
 
 
 # In[195]:
 
-# We can use this method but i think the fsolve method is more concise and yields a more accurate answer
+#### We can use this method but i think the fsolve method is more concise and yields a more accurate answer
 
 # x_graph = np.linspace(min(density_f),max(vle_densities),10000)
 # g1 = popt2[0]*np.arctan(popt2[1]*x_graph - popt2[2])
@@ -252,68 +106,69 @@ plt.show()
 # triple_y = np.array(triple_point_intersection.iloc[index,1])
 # np.concatenate((triple_x,triple_y))
 
-# In[218]:
+######## Finding Triple Point ########
 
+def difference_between_solid_liquid(x,fitted_solid_curve_params,fitted_liquid_curve_params):
+    '''
+    Calculates the difference between the temperature of the solid phase and liquid phase at a given denisity.
+    When fsolve is used on this function finds the point where the liquid curve and solid curve intersect
+    '''
+    return solid_curve(x,*fitted_solid_curve_params)-liquid_curve(x,*fitted_liquid_curve_params)
 
+density_triple_point = scipy.optimize.fsolve(difference_between_solid_liquid,x0 = 0.768,xtol=triple_point_tolerance,args=(solid_curve_parameters,liquid_curve_parameters))
+temperature_triple_point = solid_curve(density_triple_point,*solid_curve_parameters)
+
+######## Plotting ########
+
+# Plotting VLSE
 
 semi_final_fig, plots = plt.subplots()
-def difference_between_solid_liquid(x,):
-    return solid_curve(x,*popt4)-liquid_curve(x,*popt2)
-
-density_triple_point = scipy.optimize.fsolve(difference_between_solid_liquid,x0 = 0.768,xtol=1*10**(-10))
-temperature_triple_point = solid_curve(density_triple_point,*popt4)
-
-plots.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
-plots.plot(liquid_density_range,liquid_curve(liquid_density_range,*popt2),'r')
-plots.plot(solid_density_range,solid_curve(solid_density_range,*popt4),'y')
+plots.plot(gas_density_range,vapour_curve(gas_density_range,*vapour_curve_parameters),'b')
+plots.plot(liquid_density_range,liquid_curve(liquid_density_range,*liquid_curve_parameters),'r')
+plots.plot(solid_density_range,solid_curve(solid_density_range,*solid_curve_parameters),'y')
 plots.scatter(vle_densities,vle_temperatures)
 plots.scatter(density_f,T_sf)
 plots.scatter(density_triple_point,temperature_triple_point,marker = 'o',edgecolor='b',s=10)
+plt.title("VLSE curve with datapoints")
+plt.xlabel("Density")
+plt.ylabel("Temperature")
 plt.show()
 
+#Plotting solid phase only
+plt.plot(density_f,T_sf)
+plt.plot(solid_density_range,solid_curve(solid_density_range,*solid_curve_parameters),'r')
+sns.scatterplot(x=density_f,y=T_sf)
+plt.xlim(0.75,0.85)
+plt.show()
 
+# Plotting liquid phase only
 
-# In[ ]:
-vle_liq_df = pd.DataFrame({
-    'Densities' : liq_vle_density,
-    'Temperatures' : liq_vle_temp})
-vle_liq_df_sorted = vle_liq_df.sort_values(by=['Densities'])
-vle_liq_df_sorted
-vle_liq_den = vle_liq_df_sorted['Densities'].to_numpy()
-vle_liq_tem = vle_liq_df_sorted['Temperatures'].to_numpy()
-
-liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
-
-def liquid_curve(x,a,b,c):
-    return a*np.arctan(b*x-c)
-
-plt.clf()
-popt2,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
-plt.plot(liquid_density_range,liquid_curve(liquid_density_range,*popt2),'b')
+plt.plot(liquid_density_range,liquid_curve(liquid_density_range,*liquid_curve_parameters),'b')
 sns.scatterplot(x=vle_liq_den,y=vle_liq_tem)
 if include_2019_data == True:
     sns.scatterplot(x=vle_density_liq_2019_data,y=vle_temp_2019_data)
+plt.title("Liquid portion of VLSE curve")
+plt.xlabel("Density")
+plt.ylabel("Temperature")
 plt.show()
 
+# Plotting vapour phase only
 
-# In[159]:
-
-
-## Updated VLE dataset and SLE dataset for triple point!
-
-#gas phase VLE
 final_fig, phase_plot = plt.subplots()
-phase_plot.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
+phase_plot.plot(gas_density_range,vapour_curve(gas_density_range,*vapour_curve_parameters),'b')
 sns.scatterplot(x = gas_vle_density,y=gas_vle_temperature)
 if include_2019_data == True:
     sns.scatterplot(x=vle_density_gas_2019_data,y=vle_temp_2019_data)
+plt.title("Vapour portion of VLSE curve")
+plt.xlabel("Density")
+plt.ylabel("Temperature")
 plt.show()
-#liq phase VLE
 
-# Datapoint Generation
+
+
+######## Datapoint Generation ########
 
 def num_of_sobol_points(number_of_points:int):
-
     """
     Rounds the number of points you input to the nearest number required to be input to the sobol sequence
     i.e.Rounds to the nearest 2^n where n is an int
@@ -324,19 +179,17 @@ def num_of_sobol_points(number_of_points:int):
     return int(number_of_sobol_points)
 
 dimension = 2
-number_of_points = 1500
-
-points_to_generate = num_of_sobol_points(number_of_points)
+points_to_generate = num_of_sobol_points(desired_number_of_sobol_points)
 sobol_sequence = scipy.stats.qmc.Sobol(dimension) 
 sobol_values = sobol_sequence.random(points_to_generate)
 
-critical_density = 0.366
+critical_density = float(critical_point_density)
 triple_point_density = float(density_triple_point)
 
 sobol_df = pd.DataFrame(sobol_values)
 sobol_df.columns = ['rho','T']
-sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]<critical_density,vapor_curve(sobol_df["rho"],*popt1),liquid_curve(sobol_df["rho"],*popt2)) # If the density of the point is less than the critical point density, use vapour equation, if not use the liquid equation
-sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]>triple_point_density,solid_curve(sobol_df["rho"],*popt4),sobol_df['vle_curve_value_at_rho_of_sobol_point']) # If the density of the point is greater then the triple point density, use the SLE curve , if not just keep the VLE curve value
+sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]<critical_density,vapour_curve(sobol_df["rho"],*vapour_curve_parameters),liquid_curve(sobol_df["rho"],*liquid_curve_parameters)) # If the density of the point is less than the critical point density, use vapour equation, if not use the liquid equation
+sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]>triple_point_density,solid_curve(sobol_df["rho"],*solid_curve_parameters),sobol_df['vle_curve_value_at_rho_of_sobol_point']) # If the density of the point is greater then the triple point density, use the SLE curve , if not just keep the VLE curve value
 sobol_df['T_greater_than_VLE_curve'] = sobol_df["T"]>sobol_df["vle_curve_value_at_rho_of_sobol_point"] # If the temperature of the sobol point less greater than the value at the SLE-VLE curve at that density , then  True, else false
 
 print(sobol_df[sobol_df['T_greater_than_VLE_curve']]) # Print the dataframe where only the T_greater_thabn_VLE_curve is True
