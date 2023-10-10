@@ -18,42 +18,24 @@ from sympy import symbols, Eq, solve
 # In[168]:
 
 
-coexistence_temp = np.array([0.4,0.41,0.42,0.43,0.44])
-inverse_gas = np.array([35.40806914,28.16798258,21.91249159,16.245217,11.06553708])
-inverse_liq = np.array([1.331229281,1.361101621,1.39302346,1.436343071,1.480891538])
-dens_coexistence_gas = np.reciprocal(inverse_gas)
-dens_coexistence_liq = np.reciprocal(inverse_liq)
-plt.plot(dens_coexistence_gas,coexistence_temp,'y')
-plt.plot(dens_coexistence_liq,coexistence_temp)
+# coexistence_temp = np.array([0.4,0.41,0.42,0.43,0.44])
+# inverse_gas = np.array([35.40806914,28.16798258,21.91249159,16.245217,11.06553708])
+# inverse_liq = np.array([1.331229281,1.361101621,1.39302346,1.436343071,1.480891538])
+# dens_coexistence_gas = np.reciprocal(inverse_gas)
+# dens_coexistence_liq = np.reciprocal(inverse_liq)
+# plt.plot(dens_coexistence_gas,coexistence_temp,'y')
+# plt.plot(dens_coexistence_liq,coexistence_temp)
 
 
 # In[169]:
 
 
 density_f = np.array([0.786,0.801,0.829,0.856])
-
-
-# In[170]:
-
-
 density_s = np.array([0.855,0.870,0.880,0.903])
-
-
-# In[171]:
-
-
 T_sf = np.array([0.45,0.55,0.70,1])
-
-
-# In[172]:
-
 
 critical_point_density = np.array([0.366])
 critical_point_temperature = np.array([0.522])
-
-
-# In[173]:
-
 
 T_gl = np.array([0.450,0.460,0.470,0.480,0.490,0.495,0.500,0.505,0.515])
 density_gas = np.array([0.030, 0.036, 0.05, 0.053, 0.064, 0.07, 0.09, 0.09, 0.28])
@@ -109,11 +91,11 @@ vle_liq_tem = vle_liq_df_sorted['Temperatures'].to_numpy()
 
 generic_x_data2 = np.linspace(min(vle_liq_den),min(density_f),100)
 
-def func2(x,a,b,c,d):
+def liquid_curve(x,a,b,c):
     return a*np.arctan(b*x-c)
 plt.clf()
-popt2,pcov2 = curve_fit(func2,vle_liq_den,vle_liq_tem,maxfev = 100000000)
-plt.plot(generic_x_data2,func2(generic_x_data2,*popt2),'b')
+popt2,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
+plt.plot(generic_x_data2,liquid_curve(generic_x_data2,*popt2),'b')
 sns.scatterplot(x = vle_liq_den, y = vle_liq_tem)
 plt.show()
 
@@ -158,11 +140,11 @@ plt.show()
 # In[181]:
 
 plt.clf()
-def func1(x,a,b,c,d):
+def vapor_curve(x,a,b,c,d):
     return a*np.arctan(b*x-c)+d
 
-popt1,pcov1 = curve_fit(func1,vle_gas_den,vle_gas_tem,maxfev = 100000000)
-plt.plot(generic_x_data1,func1(generic_x_data1,*popt1),'b')
+popt1,pcov1 = curve_fit(vapor_curve,vle_gas_den,vle_gas_tem,maxfev = 100000000)
+plt.plot(generic_x_data1,vapor_curve(generic_x_data1,*popt1),'b')
 sns.scatterplot(x=vle_gas_den,y=vle_gas_tem)
 plt.show()
 
@@ -315,12 +297,12 @@ plt.show()
 
 plt.clf()
 plt.plot(density_f,T_sf)
-def func4(x,a,b,c,d):
+def solid_curve(x,a,b,c,d):
     return a*np.exp(b*x)+c
 
 generic_x_data4 = np.linspace(max(vle_liq_den),max(density_f),10000)
-popt4,pcov4 = curve_fit(func4,density_f,T_sf,maxfev = 100000000)
-plt.plot(generic_x_data4,func4(generic_x_data4,*popt4),'r')
+popt4,pcov4 = curve_fit(solid_curve,density_f,T_sf,maxfev = 100000000)
+plt.plot(generic_x_data4,solid_curve(generic_x_data4,*popt4),'r')
 sns.scatterplot(x=density_f,y=T_sf)
 plt.show()
 
@@ -357,9 +339,9 @@ np.concatenate((triple_x,triple_y))
 plt.clf()
 semi_final_fig = plt.figure()
 semi_final_fig, plots = plt.subplots()
-plots.plot(generic_x_data1,func1(generic_x_data1,*popt1),'b')
-plots.plot(generic_x_data2,func2(generic_x_data2,*popt2),'r')
-plots.plot(generic_x_data4,func4(generic_x_data4,*popt4),'y')
+plots.plot(generic_x_data1,vapor_curve(generic_x_data1,*popt1),'b')
+plots.plot(generic_x_data2,liquid_curve(generic_x_data2,*popt2),'r')
+plots.plot(generic_x_data4,solid_curve(generic_x_data4,*popt4),'y')
 plots.scatter(vle_densities,vle_temperatures)
 plots.scatter(density_f,T_sf)
 plots.scatter(triple_x,triple_y,marker = '^',edgecolor='b',s=100)
@@ -382,12 +364,12 @@ vle_liq_tem = vle_liq_df_sorted['Temperatures'].to_numpy()
 
 generic_x_data2 = np.linspace(min(vle_liq_den),min(density_f),100)
 
-def func2(x,a,b,c,d):
+def liquid_curve(x,a,b,c,d):
     return a*np.arctan(b*x-c)
 
 plt.clf()
-popt2,pcov2 = curve_fit(func2,vle_liq_den,vle_liq_tem,maxfev = 100000000)
-plt.plot(generic_x_data2,func2(generic_x_data2,*popt2),'b')
+popt2,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
+plt.plot(generic_x_data2,liquid_curve(generic_x_data2,*popt2),'b')
 sns.scatterplot(x=vle_liq_den,y=vle_liq_tem)
 plt.show()
 
@@ -400,15 +382,15 @@ plt.clf()
 #gas phase VLE
 final_fig = plt.figure()
 final_fig, phase_plot = plt.subplots()
-phase_plot.plot(generic_x_data1,func1(generic_x_data1,*popt1),'b')
+phase_plot.plot(generic_x_data1,vapor_curve(generic_x_data1,*popt1),'b')
 plt.show()
 #liq phase VLE
 critical_density = 0.366
 triple_point_density = 0.766577
 sobol_df = pd.DataFrame(sobol_values)
 sobol_df.columns = ['rho','T']
-sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]<critical_density,func1(sobol_df["rho"],*popt1),func2(sobol_df["rho"],*popt2)) # If the density of the point is less than the critical point density, use vapour equation, if not use the liquid equation
-sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]>triple_point_density,func4(sobol_df["rho"],*popt4),sobol_df['vle_curve_value_at_rho_of_sobol_point']) # If the density of the point is greater then the triple point density, use the SLE curve , if not just keep the VLE curve value
+sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]<critical_density,vapor_curve(sobol_df["rho"],*popt1),liquid_curve(sobol_df["rho"],*popt2)) # If the density of the point is less than the critical point density, use vapour equation, if not use the liquid equation
+sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]>triple_point_density,solid_curve(sobol_df["rho"],*popt4),sobol_df['vle_curve_value_at_rho_of_sobol_point']) # If the density of the point is greater then the triple point density, use the SLE curve , if not just keep the VLE curve value
 sobol_df['T_greater_than_VLE_curve'] = sobol_df["T"]>sobol_df["vle_curve_value_at_rho_of_sobol_point"] # If the temperature of the sobol point less greater than the value at the SLE-VLE curve at that density , then  True, else false
 
 print(sobol_df[sobol_df['T_greater_than_VLE_curve']]) # Print the dataframe where only the T_greater_thabn_VLE_curve is True
