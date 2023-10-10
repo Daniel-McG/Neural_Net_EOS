@@ -2,8 +2,6 @@
 # coding: utf-8
 
 # In[209]:
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -12,23 +10,14 @@ import seaborn as sns
 from matplotlib.widgets import SpanSelector
 import math
 import scipy
-from sympy import symbols, Eq, solve
-
-
 # In[168]:
+include_2019_data = False
 
-
-# coexistence_temp = np.array([0.4,0.41,0.42,0.43,0.44])
-# inverse_gas = np.array([35.40806914,28.16798258,21.91249159,16.245217,11.06553708])
-# inverse_liq = np.array([1.331229281,1.361101621,1.39302346,1.436343071,1.480891538])
-# dens_coexistence_gas = np.reciprocal(inverse_gas)
-# dens_coexistence_liq = np.reciprocal(inverse_liq)
-# plt.plot(dens_coexistence_gas,coexistence_temp,'y')
-# plt.plot(dens_coexistence_liq,coexistence_temp)
-
-
-# In[169]:
-
+vle_temp_2019_data = np.array([0.4,0.41,0.42,0.43,0.44])
+inverse_gas_density_2019_data = np.array([35.40806914,28.16798258,21.91249159,16.245217,11.06553708])
+inverse_liq_density_2019_data = np.array([1.331229281,1.361101621,1.39302346,1.436343071,1.480891538])
+vle_density_gas_2019_data = np.reciprocal(inverse_gas_density_2019_data)
+vle_density_liq_2019_data = np.reciprocal(inverse_liq_density_2019_data)
 
 density_f = np.array([0.786,0.801,0.829,0.856])
 density_s = np.array([0.855,0.870,0.880,0.903])
@@ -47,15 +36,15 @@ density_liq2 = np.array([0.763,0.757,0.738,0.725,0.712,0.706,0.698,0.695,0.603])
 
 
 y = T_sf
-fig, ax = plt.subplots()
-ax.plot(density_f,T_sf,'y')
-ax.plot(density_s,T_sf,'g')
-ax.plot(density_gas,T_gl,'r')
-ax.plot(density_liq,T_gl,'c')
-ax.plot(density_gas2,T_vl,'m')
-ax.plot(density_liq2,T_vl,'d')
-ax.scatter(critical_point_density,critical_point_temperature)
-plt.show()
+# fig, ax = plt.subplots()
+# ax.plot(density_f,T_sf,'y')
+# ax.plot(density_s,T_sf,'g')
+# ax.plot(density_gas,T_gl,'r')
+# ax.plot(density_liq,T_gl,'c')
+# ax.plot(density_gas2,T_vl,'m')
+# ax.plot(density_liq2,T_vl,'d')
+# ax.scatter(critical_point_density,critical_point_temperature)
+# plt.show()
 
 # desnity_ordered = np.concatenate((density_gas2,density_gas,density_liq,density_s,density_f))
 # temperature_ordered = np.concatenate((T_vl,T_gl,T_gl,T_sf,T_sf))
@@ -82,9 +71,7 @@ def liquid_curve(x,a,b,c):
     return a*np.arctan(b*x-c)
 plt.clf()
 popt2,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
-plt.plot(liquid_density_range,liquid_curve(liquid_density_range,*popt2),'b')
-sns.scatterplot(x = vle_liq_den, y = vle_liq_tem)
-plt.show()
+
 
 # In[178]:
 
@@ -101,22 +88,15 @@ vle_gas_df = pd.DataFrame({
     'Densities' : gas_vle_density,
     'Temperatures' : gas_vle_temperature})
 vle_gas_df_sorted = vle_gas_df.sort_values(by=['Densities'])
-#vle_gas_df_sorted.drop([15],inplace=True)
 vle_gas_den = vle_gas_df_sorted['Densities'].to_numpy()
 vle_gas_tem = vle_gas_df_sorted['Temperatures'].to_numpy()
 
 
 
 # In[181]:
-
-plt.clf()
 def vapor_curve(x,a,b,c,d):
     return a*np.arctan(b*x-c)+d
-
 popt1,pcov1 = curve_fit(vapor_curve,vle_gas_den,vle_gas_tem,maxfev = 100000000)
-plt.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
-sns.scatterplot(x=vle_gas_den,y=vle_gas_tem)
-plt.show()
 
 # In[182]:
 
@@ -280,7 +260,7 @@ semi_final_fig, plots = plt.subplots()
 def difference_between_solid_liquid(x,):
     return solid_curve(x,*popt4)-liquid_curve(x,*popt2)
 
-density_triple_point = scipy.optimize.fsolve(difference_between_solid_liquid,x0 = 0.768,xtol=1*10**(-15))
+density_triple_point = scipy.optimize.fsolve(difference_between_solid_liquid,x0 = 0.768,xtol=1*10**(-10))
 temperature_triple_point = solid_curve(density_triple_point,*popt4)
 
 plots.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
@@ -311,6 +291,8 @@ plt.clf()
 popt2,pcov2 = curve_fit(liquid_curve,vle_liq_den,vle_liq_tem,maxfev = 100000000)
 plt.plot(liquid_density_range,liquid_curve(liquid_density_range,*popt2),'b')
 sns.scatterplot(x=vle_liq_den,y=vle_liq_tem)
+if include_2019_data == True:
+    sns.scatterplot(x=vle_density_liq_2019_data,y=vle_temp_2019_data)
 plt.show()
 
 
@@ -322,6 +304,9 @@ plt.show()
 #gas phase VLE
 final_fig, phase_plot = plt.subplots()
 phase_plot.plot(gas_density_range,vapor_curve(gas_density_range,*popt1),'b')
+sns.scatterplot(x = gas_vle_density,y=gas_vle_temperature)
+if include_2019_data == True:
+    sns.scatterplot(x=vle_density_gas_2019_data,y=vle_temp_2019_data)
 plt.show()
 #liq phase VLE
 
@@ -339,7 +324,7 @@ def num_of_sobol_points(number_of_points:int):
     return int(number_of_sobol_points)
 
 dimension = 2
-number_of_points = 15000
+number_of_points = 1500
 
 points_to_generate = num_of_sobol_points(number_of_points)
 sobol_sequence = scipy.stats.qmc.Sobol(dimension) 
@@ -347,6 +332,7 @@ sobol_values = sobol_sequence.random(points_to_generate)
 
 critical_density = 0.366
 triple_point_density = float(density_triple_point)
+
 sobol_df = pd.DataFrame(sobol_values)
 sobol_df.columns = ['rho','T']
 sobol_df['vle_curve_value_at_rho_of_sobol_point'] = np.where(sobol_df["rho"]<critical_density,vapor_curve(sobol_df["rho"],*popt1),liquid_curve(sobol_df["rho"],*popt2)) # If the density of the point is less than the critical point density, use vapour equation, if not use the liquid equation
