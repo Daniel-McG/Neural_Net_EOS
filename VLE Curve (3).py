@@ -89,18 +89,6 @@ plt.show()
 
 # In[178]:
 
-plt.clf()
-gas_vle_density = np.concatenate((density_gas2,density_gas,critical_point_density))
-gas_vle_temperature = np.concatenate((T_vl,T_gl,critical_point_temperature))
-gas_fit = np.polyfit(gas_vle_density,gas_vle_temperature,4)
-gas_curve_function = np.poly1d(gas_fit)
-
-gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
-#generic_x_data2 = np.linspace(min(),max(),100)
-gas_vle_curve, = plt.plot(gas_density_range,gas_curve_function(gas_density_range))
-sns.scatterplot(x = gas_vle_density,y = gas_vle_temperature)
-plt.show()
-
 # In[179]:
 
 
