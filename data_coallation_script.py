@@ -2,7 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import re
-import sys  
+import sys
+import seaborn as sns
+import matplotlib.pyplot as plt
 results_filename = "nvtave.lammps"
 column_names=["TimeStep","v_TENE","v_TEMP","v_PRES","v_DENS","v_nMolecule","v_KENE","v_PENE","v_ENTH","v_VOL"]
 array_size = (1,12)
@@ -29,10 +31,13 @@ for (root,dirs,files) in os.walk(r"/home/daniel/LJ-2d-md-results", topdown=True)
             standard_deviations = np.append(standard_deviations,[temperature,density])
             ranges = data.max().values - data.min().values
             ranges = np.append(ranges,[temperature,density])
-
+            if means[0] == 2000000.0:
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"])
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean())
+                plt.show()
             coallated_means = np.append(coallated_means,[means],axis=0)
             coallated_standard_deviations = np.append(coallated_standard_deviations,[standard_deviations],axis=0)
             coallated_ranges = np.append(coallated_ranges,[ranges],axis=0)
             
 means_df = pd.DataFrame(coallated_means,columns=column_names+["Temperature","Density"])
-print(sys.getsizeof(means_df))
+print(means_df[means_df["TimeStep"]==2000000.0])
