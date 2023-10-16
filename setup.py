@@ -43,7 +43,8 @@ class BasicLightning(pl.LightningModule):
         return torch.optim.Adam(self.parameters(),lr = 0.000001 )
     
     def training_step(self,train_batch,batch_index):
-        input_i,target_i = train_batch            #Unpacking data from a batch
+        input_i,target_i = train_batch
+        print(input_i)            #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
         loss = (output_i-target_i)**2       #Calculating loss
         mean_loss = torch.mean(loss)
@@ -95,8 +96,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 64)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 64)
+    train_dataloader = DataLoader(train_dataset,batch_size = 128)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 128)
     model = BasicLightning()
     trainer = pl.Trainer(
         max_epochs=200000,
