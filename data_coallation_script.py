@@ -33,7 +33,16 @@ for (root,dirs,files) in os.walk(r"/home/daniel/LJ-2d-md-results", topdown=True)
             ranges = np.append(ranges,[temperature,density])
             if means[0] == 20000000.0:
                 sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"])
-                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(5000).mean())
+                std_of_rolling_mean_arr = []
+                
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean())
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(1000).mean())
+                testing_range = range(1000,4000,10)
+                for av_period in testing_range:
+                    std_of_rolling_mean = data["v_TENE"].rolling(av_period).mean().std()
+                    std_of_rolling_mean_arr.append(std_of_rolling_mean)
+                plt.show()
+                sns.lineplot(x=testing_range,y =std_of_rolling_mean_arr)
                 plt.show()
             coallated_means = np.append(coallated_means,[means],axis=0)
             coallated_standard_deviations = np.append(coallated_standard_deviations,[standard_deviations],axis=0)
