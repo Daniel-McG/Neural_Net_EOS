@@ -15,6 +15,7 @@ from ray.train import ScalingConfig
 import ray.train.lightning
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
+import pickle
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -28,12 +29,22 @@ class BasicLightning(pl.LightningModule):
         # Creating a sequential stack of Linear layers with Tanh activation function 
 
         self.s1 = nn.Sequential(
-          nn.Linear(2,6),
-          nn.Tanh(),
-          nn.Linear(6,4),
-          nn.Tanh(),
-          nn.Linear(4,2),
-          nn.Tanh()
+          nn.Linear(2,1000),
+          nn.ReLU(),
+          nn.Linear(1000,1000),
+          nn.ReLU(),
+          nn.Linear(1000,1000),
+          nn.ReLU(),
+          nn.Linear(1000,1000),
+          nn.ReLU(),
+          nn.Linear(1000,1000),
+          nn.ReLU(),
+          nn.Linear(1000,1000),
+          nn.ReLU(),
+          nn.Linear(1000,1000),
+          nn.ReLU(),
+          nn.Linear(1000,2),
+          nn.ReLU()
         )
 
     def forward(self,x):
@@ -41,7 +52,7 @@ class BasicLightning(pl.LightningModule):
         return out
     
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(),lr = 0.000001 )
+        return torch.optim.Adam(self.parameters(),lr = 0.00005 )
     
     def training_step(self,train_batch,batch_index):
         input_i,target_i = train_batch            #Unpacking data from a batch
@@ -59,7 +70,7 @@ class BasicLightning(pl.LightningModule):
         self.log("val_loss",mean_loss) 
         return {"val_loss": mean_loss}
     
-model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-10-16_09-24-18/TorchTrainer_67f3d_00000_0_2023-10-16_09-24-21/lightning_logs/version_0/checkpoints/epoch=28414-step=56830.ckpt")
+model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-10-16_22-35-29/TorchTrainer_ef0e2_00000_0_2023-10-16_22-35-32/lightning_logs/version_0/checkpoints/epoch=4085-step=8172.ckpt")
 model.eval()
 
 with torch.no_grad():
@@ -71,6 +82,8 @@ with torch.no_grad():
     print(x)
     x = x.to(device)
     y_hat = model(x).detach()
+    scaler = pickle.load(open("/home/daniel/ray_results/TorchTrainer_2023-10-16_22-35-29/TorchTrainer_ef0e2_00000_0_2023-10-16_22-35-32/scaler.pkl", "rb"))
+    y_hat = scaler.inverse_transform(y_hat)
     print(y_hat)
     y_hat = y_hat.cpu()
     y_hat = y_hat.numpy()
