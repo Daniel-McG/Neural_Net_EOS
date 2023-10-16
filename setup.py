@@ -17,7 +17,7 @@ from ray.tune.schedulers import ASHAScheduler
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
+device = torch.device("cpu")
 #Defining the neural network
 
 class BasicLightning(pl.LightningModule):
@@ -43,8 +43,7 @@ class BasicLightning(pl.LightningModule):
         return torch.optim.Adam(self.parameters(),lr = 0.000001 )
     
     def training_step(self,train_batch,batch_index):
-        input_i,target_i = train_batch
-        print(input_i)            #Unpacking data from a batch
+        input_i,target_i = train_batch        #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
         loss = (output_i-target_i)**2       #Calculating loss
         mean_loss = torch.mean(loss)
@@ -64,7 +63,7 @@ def train_func(config):
     data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
 
     #Preprocessing the data
-    train_df,test_df = train_test_split(data_df,train_size=0.9)
+    train_df,test_df = train_test_split(data_df,train_size=0.6)
     scaler = MinMaxScaler(feature_range =(0,1))
     train_arr= scaler.fit_transform(train_df)
     val_arr = scaler.transform(test_df)
@@ -91,7 +90,6 @@ def train_func(config):
     train_targets = train_targets.float()
     val_inputs = val_inputs.float()
     val_targets = val_targets.float()
-    print(train_inputs)
 
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
@@ -111,7 +109,7 @@ def train_func(config):
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
 
 trainer = TorchTrainer(train_func, scaling_config=scaling_config)
 result = trainer.fit()

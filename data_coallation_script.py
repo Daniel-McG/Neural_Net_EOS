@@ -31,13 +31,14 @@ for (root,dirs,files) in os.walk(r"/home/daniel/LJ-2d-md-results", topdown=True)
             standard_deviations = np.append(standard_deviations,[temperature,density])
             ranges = data.max().values - data.min().values
             ranges = np.append(ranges,[temperature,density])
-            if means[0] == 2000000.0:
+            if means[0] == 20000000.0:
                 sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"])
-                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean())
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(5000).mean())
                 plt.show()
             coallated_means = np.append(coallated_means,[means],axis=0)
             coallated_standard_deviations = np.append(coallated_standard_deviations,[standard_deviations],axis=0)
             coallated_ranges = np.append(coallated_ranges,[ranges],axis=0)
             
 means_df = pd.DataFrame(coallated_means,columns=column_names+["Temperature","Density"])
-print(means_df[means_df["TimeStep"]==2000000.0])
+print(means_df["TimeStep"].max())
+# print(means_df[means_df["TimeStep"].max()])
