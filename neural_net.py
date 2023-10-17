@@ -29,21 +29,21 @@ class BasicLightning(pl.LightningModule):
 
         self.s1 = nn.Sequential(
           nn.Linear(2,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,1000),
-          nn.ReLU(),
+          nn.Tanh(),
           nn.Linear(1000,2),
-          nn.ReLU()
+          nn.Tanh()
         )
 
     def forward(self,x):
@@ -74,9 +74,10 @@ def train_func(config):
     data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
 
     #Preprocessing the data
-    train_df,test_df = train_test_split(data_df,train_size=0.6)
+    train_df,test_df = train_test_split(data_df,train_size=0.9)
     scaler = MinMaxScaler(feature_range =(0,1))
     train_arr= scaler.fit_transform(train_df)
+    print(train_arr)
     val_arr = scaler.transform(test_df)
     pickle.dump(scaler, open('scaler.pkl', 'wb'))
     #Plotting distribution of train and test data
