@@ -32,11 +32,11 @@ for (root,dirs,files) in os.walk(r"/home/daniel/LJ-2d-md-results", topdown=True)
             ranges = data.max().values - data.min().values
             ranges = np.append(ranges,[temperature,density])
             if means[0] == 20000000.0:
-                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"])
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"],label = "Raw data")
                 std_of_rolling_mean_arr = []
                 
-                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean())
-                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(4000).mean())
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean(),label = "Rolling mean, 100K timetseps")
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(4000).mean(), label = "Rolling mean,4M timesteps")
                 testing_range = range(1000,4000,10)
                 for av_period in testing_range:
                     std_of_rolling_mean = data["v_TENE"].rolling(av_period).mean().std()
