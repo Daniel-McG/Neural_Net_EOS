@@ -70,22 +70,54 @@ class BasicLightning(pl.LightningModule):
         self.log("val_loss",mean_loss) 
         return {"val_loss": mean_loss}
     
-model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-10-16_22-35-29/TorchTrainer_ef0e2_00000_0_2023-10-16_22-35-32/lightning_logs/version_0/checkpoints/epoch=4085-step=8172.ckpt")
+model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-10-17_10-49-17/TorchTrainer_7250b_00000_0_2023-10-17_10-49-21/lightning_logs/version_0/checkpoints/epoch=1727-step=3456.ckpt")
 model.eval()
 
 with torch.no_grad():
     # density=np.arange(0.4,0.7,0.01)
     # temp = np.full((1,len(density)),2)
     # Temp_and_density = np.vstack((density,temp[0])).T
-    x = torch.tensor([0.7,1.5025])
+
+    data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
+
+    #Preprocessing the data
+    train_df,test_df = train_test_split(data_df,train_size=0.6)
+    print(train_df)
+    scaler = MinMaxScaler(feature_range =(0,1))
+    train_arr= scaler.fit_transform(train_df)
+    val_arr = scaler.transform(test_df)
+    #Plotting distribution of train and test data
+    for column in range(0,4,1):
+        plt.clf()
+        train_histplot = sns.histplot(data = train_arr[:,column])
+        train_fig = train_histplot.get_figure()
+        train_fig.savefig("/home/daniel/Pictures/BS_32_train_col{}.png".format(str(column)))
+
+    for column in range(0,4,1):
+        plt.clf()
+        val_histplot = sns.histplot(data = val_arr[:,column])
+        val_fig = val_histplot.get_figure()
+        val_fig.savefig("/home/daniel/Pictures/BS_32_val_col{}.png".format(str(column)))
+
+    #Splitting the preprocessed data into the inputs and targets
+    train_inputs = torch.tensor(train_arr[:,[0,1]])
+
+    x = train_inputs
+
     x = x.float()
-    print(x)
     x = x.to(device)
     y_hat = model(x).detach()
-    scaler = pickle.load(open("/home/daniel/ray_results/TorchTrainer_2023-10-16_22-35-29/TorchTrainer_ef0e2_00000_0_2023-10-16_22-35-32/scaler.pkl", "rb"))
-    y_hat = scaler.inverse_transform(y_hat)
-    print(y_hat)
+    scaler = pickle.load(open("/home/daniel/ray_results/TorchTrainer_2023-10-17_10-49-17/TorchTrainer_7250b_00000_0_2023-10-17_10-49-21/scaler.pkl", "rb"))
+    
+
     y_hat = y_hat.cpu()
     y_hat = y_hat.numpy()
-    # y_hat = list(np.concatenate(y_hat).flat)
-    # print(y_hat)
+    y_hat = y_hat.reshape(-1,2)
+
+    print(np.zeros((2,len(y_hat))).T)
+    y_hat = np.hstack((np.zeros((2,len(y_hat))).T,y_hat))
+
+    y_hat = scaler.inverse_transform(y_hat)
+    print(y_hat)
+    # # y_hat = list(np.concatenate(y_hat).flat)
+    # # print(y_hat)
