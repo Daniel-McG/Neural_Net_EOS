@@ -36,7 +36,7 @@ for (root,dirs,files) in os.walk(r"/home/daniel/LJ-2d-md-results", topdown=True)
                 std_of_rolling_mean_arr = []
                 
                 sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean())
-                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(1000).mean())
+                sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(4000).mean())
                 testing_range = range(1000,4000,10)
                 for av_period in testing_range:
                     std_of_rolling_mean = data["v_TENE"].rolling(av_period).mean().std()
