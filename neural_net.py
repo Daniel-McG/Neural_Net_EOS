@@ -14,23 +14,35 @@ from ray.train import ScalingConfig
 import ray.train.lightning
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
+from ray.train import RunConfig, ScalingConfig, CheckpointConfig
 import pickle
+import nevergrad as ng
+from ray.tune.search.nevergrad import NevergradSearch
+
+from ray.train.lightning import (
+    RayDDPStrategy,
+    RayLightningEnvironment,
+    RayTrainReportCallback,
+    prepare_trainer,
+)
+
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
-device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-
+# device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+device = torch.device("cpu")
 #Defining the neural network
 
 class BasicLightning(pl.LightningModule):
-    def __init__(self):
+    def __init__(self,config):
         super(BasicLightning,self).__init__() 
-
+        self.l1_size = config["layer_1_size"]
+        self.lr = config["lr"]
         # Creating a sequential stack of Linear layers with Tanh activation function 
 
         self.s1 = nn.Sequential(
-          nn.Linear(2,1000),
+          nn.Linear(2,self.l1_size),
           nn.Tanh(),
-          nn.Linear(1000,1000),
+          nn.Linear(self.l1_size,1000),
           nn.Tanh(),
           nn.Linear(1000,1000),
           nn.Tanh(),
@@ -51,7 +63,7 @@ class BasicLightning(pl.LightningModule):
         return out
     
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(),lr = 0.00005 )
+        return torch.optim.Adam(self.parameters(),lr = self.lr)
     
     def training_step(self,train_batch,batch_index):
         input_i,target_i = train_batch        #Unpacking data from a batch
@@ -77,7 +89,6 @@ def train_func(config):
     train_df,test_df = train_test_split(data_df,train_size=0.9)
     scaler = MinMaxScaler(feature_range =(0,1))
     train_arr= scaler.fit_transform(train_df)
-    print(train_arr)
     val_arr = scaler.transform(test_df)
     pickle.dump(scaler, open('scaler.pkl', 'wb'))
     #Plotting distribution of train and test data
@@ -108,22 +119,60 @@ def train_func(config):
     val_Dataset = TensorDataset(val_inputs,val_targets)
     train_dataloader = DataLoader(train_dataset,batch_size = 128)
     val_dataloader = DataLoader(val_Dataset,batch_size = 128)
-    model = BasicLightning()
+    model = BasicLightning(config)
     trainer = pl.Trainer(
-        max_epochs=400000,
         devices="auto",
         accelerator="auto",
-        strategy=ray.train.lightning.RayDDPStrategy(),
-        plugins=[ray.train.lightning.RayLightningEnvironment()]
+        strategy=RayDDPStrategy(),
+        callbacks=[RayTrainReportCallback()],
+        plugins=[RayLightningEnvironment()],
+        enable_progress_bar=False,
     )
     
     trainer = ray.train.lightning.prepare_trainer(trainer)
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
+run_config = RunConfig(
+    checkpoint_config=CheckpointConfig(
+        num_to_keep=2,
+        checkpoint_score_attribute="val_loss",
+        checkpoint_score_order="min",
+    ),
+)
 
-trainer = TorchTrainer(train_func, scaling_config=scaling_config)
-result = trainer.fit()
+trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_config)
 
 
+# Tuning
+
+search_space = {
+    "layer_1_size": tune.choice([32, 64]),
+    "lr": tune.loguniform(1e-5, 1e-4)
+}
+
+num_epochs = 200
+num_samples = 10
+
+def tune_mnist_asha(num_samples=10):
+    scheduler = ASHAScheduler(max_t=num_epochs, grace_period=10, reduction_factor=2)
+    algo = NevergradSearch(
+    optimizer=ng.optimizers.PSO
+    )
+    tuner = tune.Tuner(
+        trainer,
+        param_space={"train_loop_config": search_space},
+        tune_config=tune.TuneConfig(
+            metric="val_loss",
+            mode="min",
+            search_alg=algo,
+            num_samples=num_samples,
+            scheduler=scheduler,
+        ),
+    )
+    return tuner.fit()
+
+
+results = tune_mnist_asha(num_samples=num_samples)
+results.get_best_result(metric="val_loss", mode="min")
