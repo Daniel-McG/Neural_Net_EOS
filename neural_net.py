@@ -98,17 +98,17 @@ def train_func(config):
     val_arr = scaler.transform(test_df)
     pickle.dump(scaler, open('scaler.pkl', 'wb'))
     #Plotting distribution of train and test data
-    for column in range(0,4,1):
-        plt.clf()
-        train_histplot = sns.histplot(data = train_arr[:,column])
-        train_fig = train_histplot.get_figure()
-        train_fig.savefig("/home/daniel/Pictures/BS_32_train_col{}.png".format(str(column)))
+    # for column in range(0,4,1):
+    #     plt.clf()
+    #     train_histplot = sns.histplot(data = train_arr[:,column])
+    #     train_fig = train_histplot.get_figure()
+    #     train_fig.savefig("/home/daniel/Pictures/BS_32_train_col{}.png".format(str(column)))
 
-    for column in range(0,4,1):
-        plt.clf()
-        val_histplot = sns.histplot(data = val_arr[:,column])
-        val_fig = val_histplot.get_figure()
-        val_fig.savefig("/home/daniel/Pictures/BS_32_val_col{}.png".format(str(column)))
+    # for column in range(0,4,1):
+    #     plt.clf()
+    #     val_histplot = sns.histplot(data = val_arr[:,column])
+    #     val_fig = val_histplot.get_figure()
+    #     val_fig.savefig("/home/daniel/Pictures/BS_32_val_col{}.png".format(str(column)))
 
     #Splitting the preprocessed data into the inputs and targets
     train_inputs = torch.tensor(train_arr[:,[0,1]])
@@ -154,7 +154,7 @@ trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_
 
 
 # Tuning
-uniform_dist = tune.randint(32,256)
+uniform_dist = tune.randint(32,1000)
 search_space = {
     "layer_1_size": uniform_dist,
     "layer_2_size": uniform_dist,
@@ -167,7 +167,7 @@ search_space = {
 }
 
 num_epochs = 20000
-num_samples = 100
+num_samples = 1000
 
 def tune_mnist_asha(num_samples=num_samples):
     scheduler = ASHAScheduler(grace_period=10, reduction_factor=2)
