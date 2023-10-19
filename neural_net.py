@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 import torch.nn as nn
 import lightning as L
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import pytorch_lightning as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -18,7 +19,8 @@ from ray.train import RunConfig, ScalingConfig, CheckpointConfig
 import pickle
 import nevergrad as ng
 from ray.tune.search.nevergrad import NevergradSearch
-
+from ray.tune.search import Repeater
+from ray.train.torch import TorchConfig
 from ray.train.lightning import (
     RayDDPStrategy,
     RayLightningEnvironment,
@@ -92,7 +94,7 @@ def train_func(config):
     data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
 
     #Preprocessing the data
-    train_df,test_df = train_test_split(data_df,train_size=0.9)
+    train_df,test_df = train_test_split(data_df,train_size=0.6)
     scaler = MinMaxScaler(feature_range =(0,1))
     train_arr= scaler.fit_transform(train_df)
     val_arr = scaler.transform(test_df)
@@ -123,15 +125,16 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 128)
+    train_dataloader = DataLoader(train_dataset,batch_size = config["batch_size"])
     val_dataloader = DataLoader(val_Dataset,batch_size = 128)
     model = BasicLightning(config)
+
     trainer = pl.Trainer(
         max_epochs=20000,
         devices="auto",
         accelerator="auto",
         strategy=RayDDPStrategy(),
-        callbacks=[RayTrainReportCallback()],
+        callbacks=[RayTrainReportCallback(),EarlyStopping(monitor="val_loss",mode="min",patience=500)],
         plugins=[RayLightningEnvironment()],
         enable_progress_bar=False,
     )
@@ -140,21 +143,20 @@ def train_func(config):
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
 run_config = RunConfig(
     checkpoint_config=CheckpointConfig(
         num_to_keep=2,
         checkpoint_score_attribute="val_loss",
         checkpoint_score_order="min",
     ),
-    verbose= 0 
 )
 
 trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_config)
 
 
 # Tuning
-uniform_dist = tune.randint(32,1000)
+uniform_dist = tune.randint(32,250)
 search_space = {
     "layer_1_size": uniform_dist,
     "layer_2_size": uniform_dist,
@@ -163,17 +165,17 @@ search_space = {
     "layer_5_size": uniform_dist,
     "layer_6_size": uniform_dist,
     "layer_7_size": uniform_dist,
-    "lr": tune.loguniform(1e-5, 1e-3)
+    "lr": tune.loguniform(1e-5, 1e-3),
+    "batch_size": tune.choice([32,64,128,128*2])
 }
 
-num_epochs = 20000
-num_samples = 1000
+num_samples = 10000
+
 
 def tune_mnist_asha(num_samples=num_samples):
-    scheduler = ASHAScheduler(grace_period=10, reduction_factor=2)
+    scheduler = ASHAScheduler(max_t= 40000 , grace_period=10, reduction_factor=2)
     algo = NevergradSearch(
-    optimizer=ng.optimizers.PSO
-    )
+    optimizer=ng.optimizers.PSO)
     tuner = tune.Tuner(
         trainer,
         param_space={"train_loop_config": search_space},
@@ -183,6 +185,7 @@ def tune_mnist_asha(num_samples=num_samples):
             search_alg=algo,
             num_samples=num_samples,
             scheduler=scheduler,
+            
         ),
     )
     return tuner.fit()
