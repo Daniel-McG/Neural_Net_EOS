@@ -36,25 +36,31 @@ class BasicLightning(pl.LightningModule):
     def __init__(self,config):
         super(BasicLightning,self).__init__() 
         self.l1_size = config["layer_1_size"]
+        self.l2_size = config["layer_2_size"]
+        self.l3_size = config["layer_3_size"]
+        self.l4_size = config["layer_4_size"]
+        self.l5_size = config["layer_5_size"]
+        self.l6_size = config["layer_6_size"]
+        self.l7_size = config["layer_7_size"]
         self.lr = config["lr"]
         # Creating a sequential stack of Linear layers with Tanh activation function 
 
         self.s1 = nn.Sequential(
           nn.Linear(2,self.l1_size),
           nn.Tanh(),
-          nn.Linear(self.l1_size,1000),
+          nn.Linear(self.l1_size,self.l2_size),
           nn.Tanh(),
-          nn.Linear(1000,1000),
+          nn.Linear(self.l2_size,self.l3_size ),
           nn.Tanh(),
-          nn.Linear(1000,1000),
+          nn.Linear(self.l3_size ,self.l4_size ),
           nn.Tanh(),
-          nn.Linear(1000,1000),
+          nn.Linear(self.l4_size ,self.l5_size),
           nn.Tanh(),
-          nn.Linear(1000,1000),
+          nn.Linear(self.l5_size,self.l6_size),
           nn.Tanh(),
-          nn.Linear(1000,1000),
+          nn.Linear(self.l6_size,self.l7_size),
           nn.Tanh(),
-          nn.Linear(1000,2),
+          nn.Linear(self.l7_size,2),
           nn.Tanh()
         )
 
@@ -121,6 +127,7 @@ def train_func(config):
     val_dataloader = DataLoader(val_Dataset,batch_size = 128)
     model = BasicLightning(config)
     trainer = pl.Trainer(
+        max_epochs=20000,
         devices="auto",
         accelerator="auto",
         strategy=RayDDPStrategy(),
@@ -133,30 +140,37 @@ def train_func(config):
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 run_config = RunConfig(
     checkpoint_config=CheckpointConfig(
         num_to_keep=2,
         checkpoint_score_attribute="val_loss",
         checkpoint_score_order="min",
     ),
+    verbose= 0 
 )
 
 trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_config)
 
 
 # Tuning
-
+uniform_dist = tune.randint(32,256)
 search_space = {
-    "layer_1_size": tune.choice([32, 64]),
-    "lr": tune.loguniform(1e-5, 1e-4)
+    "layer_1_size": uniform_dist,
+    "layer_2_size": uniform_dist,
+    "layer_3_size": uniform_dist,
+    "layer_4_size": uniform_dist,
+    "layer_5_size": uniform_dist,
+    "layer_6_size": uniform_dist,
+    "layer_7_size": uniform_dist,
+    "lr": tune.loguniform(1e-5, 1e-3)
 }
 
-num_epochs = 200
-num_samples = 10
+num_epochs = 20000
+num_samples = 100
 
-def tune_mnist_asha(num_samples=10):
-    scheduler = ASHAScheduler(max_t=num_epochs, grace_period=10, reduction_factor=2)
+def tune_mnist_asha(num_samples=num_samples):
+    scheduler = ASHAScheduler(grace_period=10, reduction_factor=2)
     algo = NevergradSearch(
     optimizer=ng.optimizers.PSO
     )
