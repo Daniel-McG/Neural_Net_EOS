@@ -27,12 +27,13 @@ from ray.train.lightning import (
     RayTrainReportCallback,
     prepare_trainer,
 )
-
+from ray.tune import CLIReporter
+reporter = CLIReporter(max_progress_rows=10)
 logger = TensorBoardLogger("tb_logs", name="my_model")
-
+ray.init()
 # device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 device = torch.device("cpu")
-#Defining the neural network
+#Defining the neural 
 
 class BasicLightning(pl.LightningModule):
     def __init__(self,config):
@@ -126,7 +127,7 @@ def train_func(config):
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
     train_dataloader = DataLoader(train_dataset,batch_size = config["batch_size"])
-    val_dataloader = DataLoader(val_Dataset,batch_size = 128)
+    val_dataloader = DataLoader(val_Dataset,batch_size = config["batch_size"])
     model = BasicLightning(config)
 
     trainer = pl.Trainer(
@@ -144,7 +145,7 @@ def train_func(config):
 
 
 scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
-run_config = RunConfig(
+run_config = RunConfig(progress_reporter=reporter,
     checkpoint_config=CheckpointConfig(
         num_to_keep=2,
         checkpoint_score_attribute="val_loss",
@@ -152,7 +153,7 @@ run_config = RunConfig(
     ),
 )
 
-trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_config)
+trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_config,)
 
 
 # Tuning
@@ -185,7 +186,6 @@ def tune_mnist_asha(num_samples=num_samples):
             search_alg=algo,
             num_samples=num_samples,
             scheduler=scheduler,
-            
         ),
     )
     return tuner.fit()
