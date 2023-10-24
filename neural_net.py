@@ -71,7 +71,7 @@ class BasicLightning(pl.LightningModule):
     def forward(self,x):
         # out = self.s1(x)
         x.requires_grad = True
-        out = torch.mean(x)
+        out = 5*x
         return out
     
     def configure_optimizers(self):
@@ -104,8 +104,8 @@ class BasicLightning(pl.LightningModule):
 
     def compute_input_gradient(self, x):
         x.requires_grad = True
-        # Compute the gradient of the output of hte forward pass wrt the output
-        gradient = torch.autograd.grad(self.forward(x),x,grad_outputs=torch.ones_like(x[0][0]))
+        # Compute the gradient of the output of hte forward pass wrt the output, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
+        gradient = torch.autograd.grad(self.forward(x),x,grad_outputs=torch.ones_like(x))
         return gradient
 
 def train_func(config):
