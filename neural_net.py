@@ -27,6 +27,7 @@ from ray.train.lightning import (
     RayTrainReportCallback,
     prepare_trainer,
 )
+from torch.autograd import grad
 from ray.tune import CLIReporter
 reporter = CLIReporter(max_progress_rows=10)
 logger = TensorBoardLogger("tb_logs", name="my_model")
@@ -63,12 +64,14 @@ class BasicLightning(pl.LightningModule):
           nn.Tanh(),
           nn.Linear(self.l6_size,self.l7_size),
           nn.Tanh(),
-          nn.Linear(self.l7_size,2),
+          nn.Linear(self.l7_size,1),
           nn.Tanh()
         )
 
     def forward(self,x):
-        out = self.s1(x)
+        # out = self.s1(x)
+        x.requires_grad = True
+        out = torch.mean(x)
         return out
     
     def configure_optimizers(self):
@@ -77,18 +80,33 @@ class BasicLightning(pl.LightningModule):
     def training_step(self,train_batch,batch_index):
         input_i,target_i = train_batch        #Unpacking data from a batch
         output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
+        gradient = self.compute_input_gradient(input_i)
+        print("==================THIS IS THE GRADIENT: {} ==============".format(gradient))
         loss = (output_i-target_i)**2       #Calculating loss
         mean_loss = torch.mean(loss)
         self.log("train_loss",mean_loss)         #Logging the training loss
         return {"loss": mean_loss}
     
     def validation_step(self, val_batch, batch_idx):
+        # Unpack validation batch
         val_input_i, val_target_i = val_batch
+        # Pass input through NN to get the output
         val_output_i = self.forward(val_input_i)
+        # Calculate the squared error
         loss = (val_output_i-val_target_i)**2
+        #Find the mean squared error 
         mean_loss = torch.mean(loss)
         self.log("val_loss",mean_loss) 
         return {"val_loss": mean_loss}
+    
+    def backward(self, loss):
+        loss.backward(retain_graph=True)
+
+    def compute_input_gradient(self, x):
+        x.requires_grad = True
+        # Compute the gradient of the output of hte forward pass wrt the output
+        gradient = torch.autograd.grad(self.forward(x),x,grad_outputs=torch.ones_like(x[0][0]))
+        return gradient
 
 def train_func(config):
     # Read data from csv
@@ -100,24 +118,12 @@ def train_func(config):
     train_arr= scaler.fit_transform(train_df)
     val_arr = scaler.transform(test_df)
     pickle.dump(scaler, open('scaler.pkl', 'wb'))
-    #Plotting distribution of train and test data
-    # for column in range(0,4,1):
-    #     plt.clf()
-    #     train_histplot = sns.histplot(data = train_arr[:,column])
-    #     train_fig = train_histplot.get_figure()
-    #     train_fig.savefig("/home/daniel/Pictures/BS_32_train_col{}.png".format(str(column)))
-
-    # for column in range(0,4,1):
-    #     plt.clf()
-    #     val_histplot = sns.histplot(data = val_arr[:,column])
-    #     val_fig = val_histplot.get_figure()
-    #     val_fig.savefig("/home/daniel/Pictures/BS_32_val_col{}.png".format(str(column)))
 
     #Splitting the preprocessed data into the inputs and targets
     train_inputs = torch.tensor(train_arr[:,[0,1]])
-    train_targets = torch.tensor(train_arr[:,[2,3]])
+    train_targets = torch.tensor(train_arr[:,[2]])
     val_inputs = torch.tensor(val_arr[:,[0,1]])
-    val_targets = torch.tensor(val_arr[:,[2,3]])
+    val_targets = torch.tensor(val_arr[:,[2]])
     train_inputs = train_inputs.float()
     train_targets = train_targets.float()
     val_inputs = val_inputs.float()
@@ -144,7 +150,7 @@ def train_func(config):
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":8})
 run_config = RunConfig(progress_reporter=reporter,
     checkpoint_config=CheckpointConfig(
         num_to_keep=2,
@@ -167,7 +173,7 @@ search_space = {
     "layer_6_size": uniform_dist,
     "layer_7_size": uniform_dist,
     "lr": tune.loguniform(1e-5, 1e-3),
-    "batch_size": tune.choice([32,64,128,128*2])
+    "batch_size": tune.choice([1])
 }
 
 num_samples = 10000
