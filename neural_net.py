@@ -70,8 +70,9 @@ class BasicLightning(pl.LightningModule):
 
     def forward(self,x):
         # out = self.s1(x)
+        print(x)
         x.requires_grad = True
-        out = 5*x
+        out = 5*x**2
         return out
     
     def configure_optimizers(self):
