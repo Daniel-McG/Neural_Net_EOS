@@ -180,7 +180,7 @@ search_space = {
 num_samples = 10000
 
 
-def tune_mnist_asha(num_samples=num_samples):
+def tune_asha(num_samples=num_samples):
     scheduler = ASHAScheduler(max_t= 40000 , grace_period=100, reduction_factor=2)
     algo = NevergradSearch(
     optimizer=ng.optimizers.PSO)
@@ -198,5 +198,5 @@ def tune_mnist_asha(num_samples=num_samples):
     return tuner.fit()
 
 
-results = tune_mnist_asha(num_samples=num_samples)
+results = tune_asha(num_samples=num_samples)
 results.get_best_result(metric="val_loss", mode="min")
