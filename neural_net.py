@@ -29,50 +29,45 @@ from ray.train.lightning import (
 )
 from torch.autograd import grad
 from ray.tune import CLIReporter
+import functorch
 reporter = CLIReporter(max_progress_rows=10)
 logger = TensorBoardLogger("tb_logs", name="my_model")
-ray.init()
-# device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-device = torch.device("cpu")
+ray.init(log_to_driver=False)
+data_scaling = False
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+# device = torch.device("cpu")
 #Defining the neural 
 
 class BasicLightning(pl.LightningModule):
     def __init__(self,config):
         super(BasicLightning,self).__init__() 
-        self.l1_size = config["layer_1_size"]
-        self.l2_size = config["layer_2_size"]
-        self.l3_size = config["layer_3_size"]
-        self.l4_size = config["layer_4_size"]
-        self.l5_size = config["layer_5_size"]
-        self.l6_size = config["layer_6_size"]
-        self.l7_size = config["layer_7_size"]
-        self.lr = config["lr"]
+        self.lr = 0.0001
+        self.batch_size = 128
+        self.layer_size = config["layer_size"]
         # Creating a sequential stack of Linear layers with Tanh activation function 
 
         self.s1 = nn.Sequential(
-          nn.Linear(2,self.l1_size),
+          nn.Linear(2,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l1_size,self.l2_size),
+          nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l2_size,self.l3_size ),
+          nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l3_size ,self.l4_size ),
+          nn.Linear(self.layer_size ,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l4_size ,self.l5_size),
+          nn.Linear(self.layer_size ,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l5_size,self.l6_size),
+          nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l6_size,self.l7_size),
+          nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.l7_size,1),
-          nn.Tanh()
+          nn.Linear(self.layer_size,1),
         )
 
     def forward(self,x):
-        # out = self.s1(x)
-        print(x)
-        x.requires_grad = True
-        out = 5*x**2
+        out = self.s1(x)
+        # print(x)
+        # out = x[0][0]**2*x[0][1]**2
         return out
     
     def configure_optimizers(self):
@@ -80,10 +75,13 @@ class BasicLightning(pl.LightningModule):
     
     def training_step(self,train_batch,batch_index):
         input_i,target_i = train_batch        #Unpacking data from a batch
-        output_i = self.forward(input_i)    #Putting input data frm the batch through the neural network
+        input_i.requires_grad=True
+        output_i = self.forward(input_i)
         gradient = self.compute_input_gradient(input_i)
-        print("==================THIS IS THE GRADIENT: {} ==============".format(gradient))
-        loss = (output_i-target_i)**2       #Calculating loss
+        hessian = self.compute_hessian(input_i)
+        # print(gradient)
+        # print(hessian)
+        loss = (output_i-target_i)**2       
         mean_loss = torch.mean(loss)
         self.log("train_loss",mean_loss)         #Logging the training loss
         return {"loss": mean_loss}
@@ -103,11 +101,17 @@ class BasicLightning(pl.LightningModule):
     def backward(self, loss):
         loss.backward(retain_graph=True)
 
-    def compute_input_gradient(self, x):
-        x.requires_grad = True
+    def compute_input_gradient(self,inputs):
         # Compute the gradient of the output of hte forward pass wrt the output, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
-        gradient = torch.autograd.grad(self.forward(x),x,grad_outputs=torch.ones_like(x))
+        gradient = torch.autograd.grad(self.forward(inputs),inputs,grad_outputs=torch.ones_like(self.forward(inputs)))
         return gradient
+    
+    def compute_hessian(self, x):
+        # Compute the gradient of the output of the forward pass wrt the output, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
+        # gradient = torch.autograd.functional.hessian(self.forward,x)
+        hessians = torch.vmap(torch.func.hessian(self.forward), (0))(x)
+        return hessians
+                                                                                                                           
 
 def train_func(config):
     # Read data from csv
@@ -115,11 +119,15 @@ def train_func(config):
 
     #Preprocessing the data
     train_df,test_df = train_test_split(data_df,train_size=0.6)
-    scaler = MinMaxScaler(feature_range =(0,1))
-    train_arr= scaler.fit_transform(train_df)
-    val_arr = scaler.transform(test_df)
-    pickle.dump(scaler, open('scaler.pkl', 'wb'))
-
+    if data_scaling == True:
+        scaler = MinMaxScaler(feature_range =(0,1))
+        train_arr= scaler.fit_transform(train_df)
+        val_arr = scaler.transform(test_df)
+        pickle.dump(scaler, open('scaler.pkl', 'wb'))
+    else:
+        train_arr = train_df.values
+        val_arr = test_df.values
+    
     #Splitting the preprocessed data into the inputs and targets
     train_inputs = torch.tensor(train_arr[:,[0,1]])
     train_targets = torch.tensor(train_arr[:,[2]])
@@ -133,8 +141,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = config["batch_size"])
-    val_dataloader = DataLoader(val_Dataset,batch_size = config["batch_size"])
+    train_dataloader = DataLoader(train_dataset,batch_size = 2)
+    val_dataloader = DataLoader(val_Dataset,batch_size =2)
     model = BasicLightning(config)
 
     trainer = pl.Trainer(
@@ -151,7 +159,7 @@ def train_func(config):
     trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":8})
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
 run_config = RunConfig(progress_reporter=reporter,
     checkpoint_config=CheckpointConfig(
         num_to_keep=2,
@@ -166,15 +174,9 @@ trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_
 # Tuning
 uniform_dist = tune.randint(32,250)
 search_space = {
-    "layer_1_size": uniform_dist,
-    "layer_2_size": uniform_dist,
-    "layer_3_size": uniform_dist,
-    "layer_4_size": uniform_dist,
-    "layer_5_size": uniform_dist,
-    "layer_6_size": uniform_dist,
-    "layer_7_size": uniform_dist,
+    "layer_size":uniform_dist,
     "lr": tune.loguniform(1e-5, 1e-3),
-    "batch_size": tune.choice([10])
+    "batch_size": tune.choice([32,64,128,128*2])
 }
 
 num_samples = 10000
