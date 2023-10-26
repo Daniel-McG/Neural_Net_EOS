@@ -174,7 +174,7 @@ search_space = {
     "layer_6_size": uniform_dist,
     "layer_7_size": uniform_dist,
     "lr": tune.loguniform(1e-5, 1e-3),
-    "batch_size": tune.choice([1])
+    "batch_size": tune.choice([10])
 }
 
 num_samples = 10000
