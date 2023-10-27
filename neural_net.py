@@ -32,7 +32,7 @@ from ray.tune import CLIReporter
 import functorch
 reporter = CLIReporter(max_progress_rows=10)
 logger = TensorBoardLogger("tb_logs", name="my_model")
-ray.init(log_to_driver=False)
+ray.init(log_to_driver=True)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -42,7 +42,7 @@ class BasicLightning(pl.LightningModule):
     def __init__(self,config):
         super(BasicLightning,self).__init__() 
         self.lr = 0.0001
-        self.batch_size = 128
+        self.batch_size = 200
         self.layer_size = config["layer_size"]
         # Creating a sequential stack of Linear layers with Tanh activation function 
 
@@ -133,6 +133,7 @@ def train_func(config):
     train_targets = torch.tensor(train_arr[:,[2]])
     val_inputs = torch.tensor(val_arr[:,[0,1]])
     val_targets = torch.tensor(val_arr[:,[2]])
+    print("The Side of the training inputs is {}".format(train_inputs.element_size() * train_inputs.nelement()))
     train_inputs = train_inputs.float()
     train_targets = train_targets.float()
     val_inputs = val_inputs.float()
@@ -141,8 +142,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 2)
-    val_dataloader = DataLoader(val_Dataset,batch_size =2)
+    train_dataloader = DataLoader(train_dataset,batch_size = 200)
+    val_dataloader = DataLoader(val_Dataset,batch_size =200)
     model = BasicLightning(config)
 
     trainer = pl.Trainer(
@@ -172,20 +173,33 @@ trainer = TorchTrainer(train_func, scaling_config=scaling_config,run_config=run_
 
 
 # Tuning
-uniform_dist = tune.randint(32,250)
-search_space = {
-    "layer_size":uniform_dist,
-    "lr": tune.loguniform(1e-5, 1e-3),
-    "batch_size": tune.choice([32,64,128,128*2])
-}
+
 
 num_samples = 10000
 
 
 def tune_asha(num_samples=num_samples):
+
+    lower_limit_of_neurons_per_layer = 32
+    upper_limit_of_neurons_per_layer = 250
+
+    # Create distribution of integer values for the number of neurons per layer
+    layer_size_dist = tune.randint(lower_limit_of_neurons_per_layer,upper_limit_of_neurons_per_layer)
+    
+    # Create search space dict
+    search_space = {
+        "layer_size":layer_size_dist,
+        "lr": tune.loguniform(1e-5, 1e-3),
+    }
+
+    # Use Asynchronus Successive Having to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
     scheduler = ASHAScheduler(max_t= 40000 , grace_period=100, reduction_factor=2)
+
+    #Use Particle swarm optimisation for hyperparameter tuning from the Nevergrad package
     algo = NevergradSearch(
     optimizer=ng.optimizers.PSO)
+
+    #Instantiate the Tuner
     tuner = tune.Tuner(
         trainer,
         param_space={"train_loop_config": search_space},
