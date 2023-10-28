@@ -43,9 +43,10 @@ class BasicLightning(pl.LightningModule):
     """
     def __init__(self,config):
         super(BasicLightning,self).__init__() 
-        self.lr = 0.0001
+        self.lr = config["lr"]
         self.batch_size = 200
         self.layer_size = config["layer_size"]
+        self.weight_decay_coefficient = config["weight_decay_coefficient"]
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -77,7 +78,7 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        return torch.optim.Adam(self.parameters(),lr = self.lr)
+        return torch.optim.AdamW(self.parameters(),lr = self.lr,weight_decay=self.weight_decay_coefficient)
     
     def training_step(self,train_batch,batch_index):
         '''
@@ -97,7 +98,7 @@ class BasicLightning(pl.LightningModule):
         # Computes gradient and hessian
         train_gradient = self.compute_gradient(input_i)
         train_hessian = self.compute_hessian(input_i)
-        print("training gradient: {}".format(train_gradient))
+
         # Calculates loss
         loss = (output_i-target_i)**2       
         mean_train_loss = torch.mean(loss)
@@ -117,7 +118,6 @@ class BasicLightning(pl.LightningModule):
         val_output_i = self.forward(val_input_i)
 
         # Computes gradient and hessian
-        # print(val_input_i)
         val_gradient = self.compute_gradient(val_input_i)
         val_hessian = self.compute_hessian(val_input_i)
 
@@ -247,8 +247,8 @@ trainer = TorchTrainer(
 
 def tune_asha(num_samples,max_number_of_training_epochs):
 
-    lower_limit_of_neurons_per_layer = 32
-    upper_limit_of_neurons_per_layer = 250
+    lower_limit_of_neurons_per_layer = 10
+    upper_limit_of_neurons_per_layer = 1000
 
     # Create distribution of integer values for the number of neurons per layer
     layer_size_dist = tune.randint(lower_limit_of_neurons_per_layer,upper_limit_of_neurons_per_layer)
@@ -257,13 +257,17 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     search_space = {
                     "layer_size":layer_size_dist,
                     "lr": tune.loguniform(1e-5, 1e-3),
+                    "weight_decay_coefficient":tune.uniform(1e-6,1e-2)
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
-    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=100, reduction_factor=2)
+    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=500, reduction_factor=2)
 
     # Use Particle swarm optimisation for hyperparameter tuning from the Nevergrad package
-    algo = NevergradSearch(optimizer=ng.optimizers.PSO)
+    algo = NevergradSearch(optimizer=ng.optimizers.PSO,
+                           metric="val_loss",
+                           mode="min",
+                           )
 
     # Instantiate the Tuner
     tuner = tune.Tuner(
