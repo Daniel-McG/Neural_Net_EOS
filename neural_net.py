@@ -9,7 +9,6 @@ import pytorch_lightning as pl
 import seaborn as sns
 import matplotlib.pyplot as plt
 from torch.utils.data import TensorDataset, DataLoader
-from lightning.pytorch.loggers import TensorBoardLogger
 from ray.train.torch import TorchTrainer
 from ray.train import ScalingConfig
 import ray.train.lightning
@@ -30,8 +29,8 @@ from ray.tune import CLIReporter
 
 
 
-reporter = CLIReporter(max_progress_rows=10)
-logger = TensorBoardLogger("tb_logs", name="my_model")
+reporter = CLIReporter(max_progress_rows=5)
+
 ray.init(log_to_driver=True)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
