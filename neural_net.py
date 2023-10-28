@@ -75,22 +75,29 @@ class BasicLightning(pl.LightningModule):
         return out
     
     def configure_optimizers(self):
+        '''
+        Configures optimiser
+        '''
         return torch.optim.Adam(self.parameters(),lr = self.lr)
     
     def training_step(self,train_batch,batch_index):
+        '''
+        Performs a training step.
 
+        Unpacks the batch, passes the batch through the NN, calculates the loss, and logs the loss.
+        '''
         # Unpacks trauning batch
         input_i,target_i = train_batch       
 
-        # Ensures DAG is created for the input so that the gradient and hessian can be computed 
-        input_i.requires_grad=True
+        # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
+        input_i.requires_grad = True
 
         # Passes input through the neural net
         output_i = self.forward(input_i)
 
         # Computes gradient and hessian
-        gradient = self.compute_input_gradient(input_i)
-        hessian = self.compute_hessian(input_i)
+        train_gradient = self.compute_gradient(input_i)
+        train_hessian = self.compute_hessian(input_i)
 
         # Calculates loss
         loss = (output_i-target_i)**2       
@@ -104,8 +111,15 @@ class BasicLightning(pl.LightningModule):
         # Unpack validation batch
         val_input_i, val_target_i = val_batch
 
+        # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
+        val_input_i.requires_grad = True
+
         # Pass input through NN to get the output
         val_output_i = self.forward(val_input_i)
+
+        # Computes gradient and hessian
+        val_gradient = self.compute_gradient(val_input_i)
+        val_hessian = self.compute_hessian(val_input_i)
 
         # Calculates the loss
         loss = (val_output_i-val_target_i)**2
@@ -120,7 +134,7 @@ class BasicLightning(pl.LightningModule):
         # This modifies the backward method to retain the DAG so that the gradient and hessian can be computed
         loss.backward(retain_graph=True)
 
-    def compute_input_gradient(self,inputs):
+    def compute_gradient(self,inputs):
         # Compute the gradient of the output of the forward pass wrt the input, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
         gradient = torch.autograd.grad(self.forward(inputs),
                                        inputs,
@@ -215,11 +229,6 @@ trainer = TorchTrainer(
                        )
 
 
-# Tuning
-
-
-num_samples = 10000
-
 
 def tune_asha(num_samples=num_samples):
 
@@ -231,9 +240,9 @@ def tune_asha(num_samples=num_samples):
     
     # Create search space dict
     search_space = {
-        "layer_size":layer_size_dist,
-        "lr": tune.loguniform(1e-5, 1e-3),
-    }
+                    "layer_size":layer_size_dist,
+                    "lr": tune.loguniform(1e-5, 1e-3),
+                    }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
     scheduler = ASHAScheduler(max_t= 40000, grace_period=100, reduction_factor=2)
@@ -255,6 +264,9 @@ def tune_asha(num_samples=num_samples):
                         )
     return tuner.fit()
 
+
+# Define the number of tuning experiments to run
+num_samples = 10000
 
 results = tune_asha(num_samples=num_samples)
 results.get_best_result(metric="val_loss", mode="min")
