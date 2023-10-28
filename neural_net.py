@@ -26,7 +26,7 @@ from ray.train.lightning import (RayDDPStrategy,
                                  prepare_trainer)
 from ray.tune import CLIReporter
 
-
+max_number_of_training_epochs = 20000
 
 
 reporter = CLIReporter(max_progress_rows=5)
@@ -148,7 +148,7 @@ class BasicLightning(pl.LightningModule):
         return hessians
                                                                                                                            
 
-def train_func(config):
+def train_func(config,max_number_of_training_epochs):
     # Read data from csv
     data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
 
@@ -187,7 +187,7 @@ def train_func(config):
 
     trainer = pl.Trainer(
         # Define the max number of epochs for the trainer, this is also enforced by the scheduler.
-        max_epochs=20000,
+        max_epochs=max_number_of_training_epochs,
 
         # Use GPU if available
         devices="auto",
@@ -233,7 +233,7 @@ trainer = TorchTrainer(
 
 
 
-def tune_asha(num_samples):
+def tune_asha(num_samples,max_number_of_training_epochs):
 
     lower_limit_of_neurons_per_layer = 32
     upper_limit_of_neurons_per_layer = 250
@@ -248,7 +248,7 @@ def tune_asha(num_samples):
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
-    scheduler = ASHAScheduler(max_t= 40000, grace_period=100, reduction_factor=2)
+    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=100, reduction_factor=2)
 
     # Use Particle swarm optimisation for hyperparameter tuning from the Nevergrad package
     algo = NevergradSearch(optimizer=ng.optimizers.PSO)
@@ -271,5 +271,5 @@ def tune_asha(num_samples):
 # Define the number of tuning experiments to run
 num_samples = 10000
 
-results = tune_asha(num_samples)
+results = tune_asha(num_samples,max_number_of_training_epochs)
 results.get_best_result(metric="val_loss", mode="min")
