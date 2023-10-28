@@ -155,8 +155,8 @@ def train_func(config):
 
     # Preprocessing the data
 
-    # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input i.e. temperature , not scaled temperature.
-    # It might be possible to write the min max sacaling in PyTorch so that the DAG is retained all the way to the input data but im not sure if
+    # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
+    # It may be possible to write the min max sacaling in PyTorch so that the DAG is retained all the way to the input data but im not sure if
     # the TensorDataset and DataLoader would destroy the DAG.
     # Since the density is already in ~0-1 scale and the temperature is only on a ~0-10 scale, it will be okay.
     # Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
@@ -194,11 +194,15 @@ def train_func(config):
         devices="auto",
         accelerator="auto",
 
+        # Selects distributed data paralell training strategy. URL explaining DDP : https://lightning.ai/docs/pytorch/stable/accelerators/gpu_intermediate.html#distributed-data-parallel
+        # DDP is described as being used for "Strategy for multi-process single-device training on one or multiple nodes". URL: https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
         strategy=RayDDPStrategy(),
+
+        # End of epoch reporting to ray train for metrics and to pytorch lightning for early stopping
         callbacks=[
                    RayTrainReportCallback(),
 
-                   # Monitor the validation loss and if its increasing for more than 500 epochs, terminate the training.
+                   # Monitor the validation loss and if its not decreasing for more than 500 epochs, terminate the training.
                    EarlyStopping(monitor="val_loss",mode="min",patience=500)
                    ],
         plugins=[RayLightningEnvironment()],
@@ -230,7 +234,7 @@ trainer = TorchTrainer(
 
 
 
-def tune_asha(num_samples=num_samples):
+def tune_asha(num_samples):
 
     lower_limit_of_neurons_per_layer = 32
     upper_limit_of_neurons_per_layer = 250
@@ -268,5 +272,5 @@ def tune_asha(num_samples=num_samples):
 # Define the number of tuning experiments to run
 num_samples = 10000
 
-results = tune_asha(num_samples=num_samples)
+results = tune_asha(num_samples)
 results.get_best_result(metric="val_loss", mode="min")
