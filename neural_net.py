@@ -97,7 +97,7 @@ class BasicLightning(pl.LightningModule):
         # Computes gradient and hessian
         train_gradient = self.compute_gradient(input_i)
         train_hessian = self.compute_hessian(input_i)
-
+        print("training gradient: {}".format(train_gradient))
         # Calculates loss
         loss = (output_i-target_i)**2       
         mean_train_loss = torch.mean(loss)
@@ -117,6 +117,7 @@ class BasicLightning(pl.LightningModule):
         val_output_i = self.forward(val_input_i)
 
         # Computes gradient and hessian
+        # print(val_input_i)
         val_gradient = self.compute_gradient(val_input_i)
         val_hessian = self.compute_hessian(val_input_i)
 
@@ -133,11 +134,22 @@ class BasicLightning(pl.LightningModule):
         # This modifies the backward method to retain the DAG so that the gradient and hessian can be computed
         loss.backward(retain_graph=True)
 
+    def on_validation_model_eval(self, *args, **kwargs):
+
+        # PyTorch Lightning by default sets the model to eval mode when performing the validation loop to conserve memory,
+        # However this means that the DAG isn't computed so the gradients cannot be calculated.
+        # This overrides that default
+
+        super().on_validation_model_eval(*args, **kwargs)
+        torch.set_grad_enabled(True)
+
     def compute_gradient(self,inputs):
         # Compute the gradient of the output of the forward pass wrt the input, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
         gradient = torch.autograd.grad(self.forward(inputs),
                                        inputs,
-                                       grad_outputs=torch.ones_like(self.forward(inputs))
+                                       grad_outputs=torch.ones_like(self.forward(inputs)),
+                                       retain_graph=True,
+                                       create_graph=True
                                        )
         return gradient
     
@@ -148,7 +160,7 @@ class BasicLightning(pl.LightningModule):
         return hessians
                                                                                                                            
 
-def train_func(config,max_number_of_training_epochs):
+def train_func(config):
     # Read data from csv
     data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
 
