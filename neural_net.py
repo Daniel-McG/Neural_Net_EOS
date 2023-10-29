@@ -26,12 +26,13 @@ from ray.train.lightning import (RayDDPStrategy,
                                  prepare_trainer)
 from ray.tune import CLIReporter
 
+
 max_number_of_training_epochs = 20000
 
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=True)
+ray.init(log_to_driver=False)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -285,7 +286,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
 
 
 # Define the number of tuning experiments to run
-num_samples = 10000
+num_samples = 1
 
 results = tune_asha(num_samples,max_number_of_training_epochs)
 results.get_best_result(metric="val_loss", mode="min")
