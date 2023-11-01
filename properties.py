@@ -98,17 +98,21 @@ def thermal_pressure_coefficient(P,PE,rho,T,N):
     N: Number of molecules
     """
     PE = PE*N
+    rho_average = np.mean(rho)
     T_average = np.mean(T)
     PE_average = np.mean(PE)
     P_average = np.mean(P)
     part1 = (np.mean((PE-PE_average)*(P-P_average)))/(Kb*(T_average**2))
-    part2 = rho*Kb
+    part2 = rho_average*Kb
     gamma_v = part1 + part2
     gamma_v = gamma_v/N
     return gamma_v
 
 def compressibility_factor(P,rho,T):
-    return P/(rho*T)
+    rho_average = np.mean(rho)
+    P_average = np.mean(P)
+    T_average = np.mean(T)
+    return P_average/(rho_average*T_average)
 
 
 
