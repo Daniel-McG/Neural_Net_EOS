@@ -3,12 +3,140 @@ import pandas as pd
 import numpy as np
 import re
 import sys
-
-#Importing functions to calculate derivative properties from properties.py file
-import properties
-                        
-
 path_to_results = r"/home/daniel/Downloads/LJ-2d-md-results/"
+Na = 6.02*10**23
+#Kb = 1.380649*(10**-23)
+Kb = 1 # Reduced Units?
+# Temperature - Intensive
+# Pressure - Intensive
+# Density - intensive
+
+# Total energy - since its the sum of kinetic and potential
+# these are both extensive thus the sum will be extensive
+# Kinetic energy - Extensive
+# Potential energy - extensive
+# Volume - Extensive
+# Enthalpy - extensive
+def isochoric_heat_capacity(N,PE,T):
+    """
+    Calcualtes the isochoric heat capacity from the results of a NVT ensemble Molecular dynamics simulation
+
+    N: Number of particles
+    PE: Instantaneous potential energy
+    T: Temperature
+
+    """
+    PE = PE*N
+    T_average = np.mean(T)
+    squared_1 = np.mean(PE**2)
+    squared_2 = np.mean(PE)**2
+    part1 = ((squared_1 - squared_2)/(Kb*T_average**2))
+    part2 = (3/2)*(N*Kb)
+    cv = part1 + part2
+    cv = cv/N
+    return cv
+
+def isobaric_heat_capacity(E,N,P,V,T):
+    '''
+    Calculates the isobarc heat capacity from the results of a NPT ensemble molecuar dynamics simulation
+
+    E: Instantaneous total energy
+    N: Number of particles
+    P: Instantaneous pressure
+    V: Instantaneous volume
+    T: Instantaneous Temperature
+    '''
+    E = E*N
+    T_average = np.mean(T)
+    P_average = np.mean(P)
+    V_average = np.mean(V)
+    E_PV = E + (P_average*V_average)
+    squared_1 = np.mean(E_PV**2)
+    squared_2 = np.mean(E_PV)**2
+    cp = (1/(Kb*(T_average**2)))*(squared_1 - squared_2)
+    cp = cp/N
+    return cp
+
+def thermal_expansion_coefficient(E,P,T,V,N):
+    '''
+    Calculates the thermal expansion coefficient from the results of a NPT ensemble molecular dynamics simulation
+
+    E: Instantaneous total energy
+    N: Number of particles
+    P: Instantaneous pressure
+    V: Instantaneous volume
+    T: Instantaneous Temperatur
+    '''
+    E = E*N
+    T_average = np.mean(T)
+    P_average = np.mean(P)
+    V_average = np.mean(V)
+    E_PV = E + (P_average*V_average)
+    E_PV_average = np.mean(E_PV)
+    alpha_p = (1/(Kb*(T_average**2)*V_average))*(np.mean((V - V_average)*(E_PV-E_PV_average)))
+    alpha_p = alpha_p/N
+    return alpha_p
+
+def isothermal_compressibility(V,T):
+    """
+    Calculates the isothermal compressibility from the results of a NPT ensemble molecular dynamics simulation
+
+    V: Instantaneous volume
+    T: Instantaneous temperature
+    """
+    T_average = np.mean(T)
+    V_average = np.mean(V)
+    squared_1 = np.mean(V**2)
+    squared_2 = V_average**2
+    return (1/(V_average*Kb*T_average))*(squared_1-squared_2)
+
+def thermal_pressure_coefficient(P,PE,rho,T,N):
+    """
+    Calculates the thermal pressure coefficent from the results of a NVT ensemble molecular dynamics simulation
+
+    P: Instantaneous pressure
+    PE: Instantaneous potential energy
+    rho: Instantaneous density
+    T: Instantaneous temperature
+    N: Number of molecules
+    """
+    PE = PE*N
+    rho_average = np.mean(rho)
+    T_average = np.mean(T)
+    PE_average = np.mean(PE)
+    P_average = np.mean(P)
+    part1 = (np.mean((PE-PE_average)*(P-P_average)))/(Kb*(T_average**2))
+    part2 = rho_average*Kb
+    gamma_v = part1 + part2
+    gamma_v = gamma_v/N
+    return gamma_v
+
+def compressibility_factor(P,rho,T):
+    rho_average = np.mean(rho)
+    P_average = np.mean(P)
+    T_average = np.mean(T)
+    return P_average/(rho_average*T_average)
+def inital_property_check(initial_temperature,temperature_vector,initial_density,density_vector,tolerance):
+    '''
+    Checks if the temperature from the simulation is within a given tolerance of the initial temperature
+
+    initial_temperature: A scaler of the temperature that the simulation was started at
+    temperature_vector: A vector of the temperatures from the simulation
+    tolerance: A scalar of the allowable difference between the initial temperature
+    '''
+    def aboslute_difference(inital_property,property_vector):
+        mean_property = np.mean(property_vector)
+        difference = abs(inital_property-mean_property)
+        return difference
+
+    temperature_difference = aboslute_difference(initial_temperature,temperature_vector)
+    density_difference = aboslute_difference(initial_density,density_vector)
+    if temperature_difference > tolerance:
+        print("T {} {}".format(initial_density,initial_temperature))
+    if density_difference > tolerance:
+        print("D {} {}".format(initial_density,initial_temperature))                      
+
+
 def script(path_to_results):
     '''
     Calculates derivative properties for many LAMMPS runs by iterating through the results directory,
@@ -18,14 +146,17 @@ def script(path_to_results):
     NPT_results_filename = "nptave.lammps"
     # Creating numpy arrays with the correct dimensions to append the results to
     array_size = (1,12)
+    current_results_size = (1,4)
     coallated_means = np.zeros(array_size)
     coallated_standard_deviations = np.zeros(array_size)
     coallated_ranges = np.zeros(array_size)
 
     for (root,dirs,files) in os.walk(path_to_results, topdown=True):
+        derivative_properties = []
+        mean_NVT_results = np.zeros((1,1))
+        mean_NPT_results = np.zeros((1,1))
         for filename in files:
             if (filename == NVT_results_filename):
-
                 # Separate the folder structure into individual items in a list
                 split_root_folder_structure = str.split(root,sep="/")
 
@@ -51,7 +182,7 @@ def script(path_to_results):
                                       delimiter=" ",
                                       )
                 data_arr= data_df.to_numpy()
-
+                mean_NVT_results = data_arr.mean(axis=0)
                 # Assign columns of data to the respective variable
                 total_energy = data_arr[:,1]
                 temperature = data_arr[:,2]
@@ -63,48 +194,12 @@ def script(path_to_results):
                 enthalpy = data_arr[:,8]
                 volume = data_arr[:,9]
 
-                # Test that the data has been read correctly 
-                # if (temperature == 0.406597) & (density == 0.760723):
-                #     assert total_energy[0] == -2.01527, "Data read failure , Total energy has been read incorrectly as per test case"
-                #     assert pressure[0] == -0.0152766, "Data read failure , Pressure has been read incorrectly as per test case"
-                #     assert kinetic_energy[0] ==  0.405846, "Data read failure , Kinetic energy has been read incorrectly as per test case"
-                #     assert potential_energy[0] == -2.42111, "Data read failure , Potential energy has been read incorrectly as per test case"
-                #     assert enthalpy[0] == -2.03535, "Data read failure , Enthalpy has been read incorrectly as per test case"
-                #     assert volume[0] == 2692.18, "Data read failure , Volume has been read incorrectly as per test case"
 
-                isochoric_heat_capacity = properties.isochoric_heat_capacity(number_of_particles,potential_energy,temperature)
-                thermal_pressure_coefficient = properties.thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
-                print(thermal_pressure_coefficient,temperature,density)
-                # mean_values = np.mean(arr,axis=0)
-                # means = np.append(mean_values,[temperature,density])
-                # standard_deviations = data.std().values
-                # standard_deviations = np.append(standard_deviations,[temperature,density])
-                # ranges = data.max().values - data.min().values
-                # ranges = np.append(ranges,[temperature,density])
-    #             # if means[0] == 20000000.0:
-    #             #     sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"],label = "Raw data")
-    #             #     std_of_rolling_mean_arr = []
-                    
-    #             #     sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(100).mean(),label = "Rolling mean, 100K timetseps")
-    #             #     sns.lineplot(data = data, x = "TimeStep",y = data["v_TENE"].rolling(4000).mean(), label = "Rolling mean,4M timesteps")
-    #             #     testing_range = range(1000,4000,10)
-    #             #     for av_period in testing_range:
-    #             #         std_of_rolling_mean = data["v_TENE"].rolling(av_period).mean().std()
-    #             #         std_of_rolling_mean_arr.append(std_of_rolling_mean)
-    #             #     plt.show()
-    #             #     sns.lineplot(x=testing_range,y =std_of_rolling_mean_arr)
-    #             #     # plt.show()
-                # coallated_means = np.append(coallated_means,[means],axis=0)
-                # coallated_standard_deviations = np.append(coallated_standard_deviations,[standard_deviations],axis=0)
-                # coallated_ranges = np.append(coallated_ranges,[ranges],axis=0)
-                
-    # means_df = pd.DataFrame(coallated_means,columns=column_names+["Temperature","Density"])
-    # np.savetxt("coallated_results.txt",means_df.values)
+                cv = isochoric_heat_capacity(number_of_particles,potential_energy,temperature)
+                gamma_v = thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
+                derivative_properties.append(cv)
+                derivative_properties.append(gamma_v)
 
-
-
-
-            
             if filename== NPT_results_filename:
                  # Separate the folder structure into individual items in a list
                 split_root_folder_structure = str.split(root,sep="/")
@@ -119,8 +214,8 @@ def script(path_to_results):
                 temperature, density = temp_and_density
 
                 # Convert temperature and density stings to floats
-                temperature = float(temperature)
-                density = float(density)
+                initial_temperature = float(temperature)
+                initial_density = float(density)
 
                 # Join the results filename to the path to allow the data to be read
                 path_to_results = os.path.join(root,filename)
@@ -131,7 +226,7 @@ def script(path_to_results):
                                       delimiter=" ",
                                       )
                 data_arr= data_df.to_numpy()
-
+                mean_NPT_results = data_arr.mean(axis=0)
                 # Assign columns of data to the respective variable
                 total_energy = data_arr[:,1]
                 temperature = data_arr[:,2]
@@ -143,9 +238,19 @@ def script(path_to_results):
                 enthalpy = data_arr[:,8]
                 volume = data_arr[:,9]
 
+                
+                inital_property_check(initial_temperature,temperature,initial_density,density,0.01)
 
-                isobaric_heat_capacity = properties.isobaric_heat_capacity(total_energy,number_of_particles,pressure,volume,temperature)
-                thermal_expansion_coefficient = properties.thermal_expansion_coefficient(total_energy,pressure,temperature,volume,number_of_particles)
-                isothermal_compressibility = properties.isothermal_compressibility(volume,temperature)
-
+                cp = isobaric_heat_capacity(total_energy,number_of_particles,pressure,volume,temperature)
+                alpha_p = thermal_expansion_coefficient(total_energy,pressure,temperature,volume,number_of_particles)
+                beta_t = isothermal_compressibility(volume,temperature)
+                derivative_properties.append(cp)
+                derivative_properties.append(alpha_p)
+                derivative_properties.append(beta_t)
+        # if the derivatives properties array is empty, dont write the data out
+        if (not derivative_properties) or (len(derivative_properties) < 5 ):
+            continue
+        npt_nvt_derivative_results = np.concatenate((mean_NPT_results,mean_NVT_results,derivative_properties))
+        print(npt_nvt_derivative_results)
+    # np.savetxt("coallated_results.txt",means_df.values)
 script(path_to_results)

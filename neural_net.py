@@ -87,8 +87,8 @@ class BasicLightning(pl.LightningModule):
 
         Unpacks the batch, passes the batch through the NN, calculates the loss, and logs the loss.
         '''
-        # Unpacks trauning batch
-        input_i,target_i = train_batch       
+        + # Unpacks trauning batch
+        input_i,target_i = train_batch      
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         input_i.requires_grad = True
