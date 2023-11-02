@@ -279,7 +279,10 @@ def script(path_to_results):
     strings_to_log = ["Number of runs before NPT NVT convergence check: {}".format(len(coallated_properties)),
                       "Number of runs after NPT NVT convergence check: {}".format(len(coallated_properties_with_removed_invalid_densities_and_temperatures))
                       ]
+    
     with open('log.txt', 'w') as f:
         f.write("\n".join(strings_to_log))
+        
+    np.savetxt("coallated_results.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
 
 script(path_to_results)
