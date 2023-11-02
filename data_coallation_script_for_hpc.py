@@ -144,7 +144,7 @@ def script(path_to_results):
     '''
     NVT_results_filename = "nvtave.lammps"
     NPT_results_filename = "nptave.lammps"
-    NPT_NVT_convergence_tolerance = 1e-4
+    NPT_NVT_convergence_tolerance = 1e-2
     # Creating numpy arrays with the correct dimensions to append the results to
     array_size = (1,25)
     coallated_properties = np.zeros(array_size)
