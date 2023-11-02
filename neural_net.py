@@ -32,7 +32,7 @@ max_number_of_training_epochs = 20000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=False)
+ray.init(log_to_driver=True)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -87,9 +87,12 @@ class BasicLightning(pl.LightningModule):
 
         Unpacks the batch, passes the batch through the NN, calculates the loss, and logs the loss.
         '''
-        + # Unpacks trauning batch
-        input_i,target_i = train_batch      
 
+        # Unpacks trauning batch
+        input_i,target_i = train_batch
+        temperature = input_i[:,0]
+        density = input_i[:,1]   
+        # temperature = input_i[:,0]
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         input_i.requires_grad = True
 
@@ -99,7 +102,8 @@ class BasicLightning(pl.LightningModule):
         # Computes gradient and hessian
         train_gradient = self.compute_gradient(input_i)
         train_hessian = self.compute_hessian(input_i)
-
+        print(train_hessian.shape)
+        # d2Adrho2= train_hessian[]
         # Calculates loss
         loss = (output_i-target_i)**2       
         mean_train_loss = torch.mean(loss)
@@ -163,8 +167,7 @@ class BasicLightning(pl.LightningModule):
 
 def train_func(config):
     # Read data from csv
-    data_df = pd.read_csv('/home/daniel/Downloads/MSc_data.csv',names=['rho','T','P','U'])
-
+    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results.txt',delimiter=" ")
     # Preprocessing the data
 
     # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -180,10 +183,12 @@ def train_func(config):
     val_arr = test_df.values
     
     # Splitting the preprocessed data into the inputs and targets
-    train_inputs = torch.tensor(train_arr[:,[0,1]])
-    train_targets = torch.tensor(train_arr[:,[2]])
-    val_inputs = torch.tensor(val_arr[:,[0,1]])
-    val_targets = torch.tensor(val_arr[:,[2]])
+    density_column = 4
+    temperature_column = 2
+    train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
+    train_targets = torch.tensor(train_arr[:,[20]])
+    val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
+    val_targets = torch.tensor(val_arr[:,[20]])
     train_inputs = train_inputs.float()
     train_targets = train_targets.float()
     val_inputs = val_inputs.float()
@@ -192,8 +197,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 200)
-    val_dataloader = DataLoader(val_Dataset,batch_size =200)
+    train_dataloader = DataLoader(train_dataset,batch_size = 2)
+    val_dataloader = DataLoader(val_Dataset,batch_size =2)
 
     # Instantiating the neural network
     model = BasicLightning(config)

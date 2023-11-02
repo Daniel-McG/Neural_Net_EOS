@@ -11,4 +11,4 @@ A repository for the Python code related to a 2023 masters research thesis on ne
 8. Does the MinMax scaler ruin the ability to compute the gradient of the helmholts wrt inputs since its no longer the temperature thats being inputted to the NN 
 9. Add learning rate scheduling 
 
-
+   
