@@ -162,7 +162,7 @@ def script(path_to_results):
                 print(split_root_folder_structure)
 
                 # Index the folder structure where the foldername that contains the temperature and density 
-                temp_and_density_foldername = split_root_folder_structure[5]
+                temp_and_density_foldername = split_root_folder_structure[7]
 
                 # Use regex to find the temperature and density from the folder name
                 temp_and_density = re.findall("\d+\.\d+", temp_and_density_foldername)
@@ -206,7 +206,7 @@ def script(path_to_results):
                 split_root_folder_structure = str.split(root,sep="/")
                 print(split_root_folder_structure)
                 # Index the folder structure where the foldername that contains the temperature and density 
-                temp_and_density_foldername = split_root_folder_structure[5]
+                temp_and_density_foldername = split_root_folder_structure[7]
 
                 # Use regex to find the temperature and density from the folder name
                 temp_and_density = re.findall("\d+\.\d+", temp_and_density_foldername)
