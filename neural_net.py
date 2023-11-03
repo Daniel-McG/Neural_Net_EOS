@@ -91,7 +91,9 @@ class BasicLightning(pl.LightningModule):
         # Unpacks trauning batch
         input_i,target_i = train_batch
         temperature = input_i[:,0]
-        density = input_i[:,1]   
+        density = input_i[:,1]
+        cv_target = target_i[:,0]
+        print(cv_target)  
         # temperature = input_i[:,0]
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         input_i.requires_grad = True
@@ -102,10 +104,36 @@ class BasicLightning(pl.LightningModule):
         # Computes gradient and hessian
         train_gradient = self.compute_gradient(input_i)
         train_hessian = self.compute_hessian(input_i)
-        print(train_hessian.shape)
-        # d2Adrho2= train_hessian[]
+
+        # The train hessian is returned as a 4D tensor, it can be thought of a batch_size*1 matrix of 2*2 matricies
+        print("start")
+        print(train_hessian[:,:])
+
+        d2A_drho2= train_hessian[:, # In all of the hessians in the batch ...
+                                 :, # In all of the heassians in the batch ...
+                                 0, # in the first row ...
+                                 0] # return the value in the first column
+        
+        d2A_dT2 = train_hessian[:, # In all of the hessians in the batch ...
+                                :, # In all of the heassians in the batch ...
+                                1, # in the second row ...
+                                1] # return the value in the second column
+        
+        d2A_dT_drho = train_hessian[:, # In all of the hessians in the batch ...
+                                :, # In all of the heassians in the batch ...
+                                1, # in the second row ...
+                                0] # return the value in the first column
+        temperature = torch.reshape(temperature,(-1,))
+        d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
+        print(d2A_drho2)
+        cv_predicted = -temperature*d2A_drho2
+        print(cv_predicted)
+
+        # print("first {}".format(train_hessian[:,0]))
+        # print("second {}".format(train_hessian[:,0,0]))
+        # print("thrid {}".format(train_hessian[:,0,0,0]))
         # Calculates loss
-        loss = (output_i-target_i)**2       
+        loss = (cv_predicted-cv_target)**2       
         mean_train_loss = torch.mean(loss)
 
         self.log("train_loss",mean_train_loss)
@@ -185,6 +213,7 @@ def train_func(config):
     # Splitting the preprocessed data into the inputs and targets
     density_column = 4
     temperature_column = 2
+    cv_column = len
     train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
     train_targets = torch.tensor(train_arr[:,[20]])
     val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
