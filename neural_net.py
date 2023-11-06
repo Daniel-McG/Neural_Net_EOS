@@ -45,7 +45,7 @@ class BasicLightning(pl.LightningModule):
     def __init__(self,config):
         super(BasicLightning,self).__init__() 
         self.lr = config["lr"]
-        self.batch_size = 200
+        self.batch_size = 6000
         self.layer_size = config["layer_size"]
         self.weight_decay_coefficient = config["weight_decay_coefficient"]
 
@@ -93,7 +93,7 @@ class BasicLightning(pl.LightningModule):
         temperature = input_i[:,0]
         density = input_i[:,1]
         cv_target = target_i[:,0]
-        print(cv_target)  
+        # print(cv_target)  
         # temperature = input_i[:,0]
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         input_i.requires_grad = True
@@ -106,8 +106,8 @@ class BasicLightning(pl.LightningModule):
         train_hessian = self.compute_hessian(input_i)
 
         # The train hessian is returned as a 4D tensor, it can be thought of a batch_size*1 matrix of 2*2 matricies
-        print("start")
-        print(train_hessian[:,:])
+        # print("start")
+        # print(train_hessian[:,:])
 
         d2A_drho2= train_hessian[:, # In all of the hessians in the batch ...
                                  :, # In all of the heassians in the batch ...
@@ -125,15 +125,16 @@ class BasicLightning(pl.LightningModule):
                                 0] # return the value in the first column
         temperature = torch.reshape(temperature,(-1,))
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        print(d2A_drho2)
+
         cv_predicted = -temperature*d2A_drho2
-        print(cv_predicted)
+
 
         # print("first {}".format(train_hessian[:,0]))
         # print("second {}".format(train_hessian[:,0,0]))
         # print("thrid {}".format(train_hessian[:,0,0,0]))
         # Calculates loss
-        loss = (cv_predicted-cv_target)**2       
+        
+        loss = (cv_target-cv_predicted)**2 + output_i*torch.zeros_like(output_i)      
         mean_train_loss = torch.mean(loss)
 
         self.log("train_loss",mean_train_loss)
@@ -151,8 +152,8 @@ class BasicLightning(pl.LightningModule):
         val_output_i = self.forward(val_input_i)
 
         # Computes gradient and hessian
-        val_gradient = self.compute_gradient(val_input_i)
-        val_hessian = self.compute_hessian(val_input_i)
+        # val_gradient = self.compute_gradient(val_input_i)
+        # val_hessian = self.compute_hessian(val_input_i)
 
         # Calculates the loss
         loss = (val_output_i-val_target_i)**2
@@ -226,8 +227,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 2)
-    val_dataloader = DataLoader(val_Dataset,batch_size =2)
+    train_dataloader = DataLoader(train_dataset,batch_size = 6000)
+    val_dataloader = DataLoader(val_Dataset,batch_size =6000)
 
     # Instantiating the neural network
     model = BasicLightning(config)
@@ -262,7 +263,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
