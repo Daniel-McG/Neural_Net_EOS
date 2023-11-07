@@ -79,7 +79,15 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        return torch.optim.AdamW(self.parameters(),lr = self.lr,weight_decay=self.weight_decay_coefficient)
+        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr,weight_decay=self.weight_decay_coefficient)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
+        current_lr = scheduler.get_last_lr()
+        print(current_lr)
+        output_dict = {
+        "optimizer": optimiser,
+        "lr_scheduler": {"scheduler":scheduler}
+        }
+        return output_dict
     
     def training_step(self,train_batch,batch_index):
         '''
@@ -88,28 +96,28 @@ class BasicLightning(pl.LightningModule):
         Unpacks the batch, passes the batch through the NN, calculates the loss, and logs the loss.
         '''
 
-        # Unpacks trauning batch
-        input_i,target_i = train_batch
-        density = input_i[:,0]
-        temperature = input_i[:,1]
+        # Unpack validation batch
+        train_input_i, train_target_i = train_batch
+        rho = train_input_i[:,0]
+        T = train_input_i[:,1]
 
+        cv_target = train_target_i[:,0]
+        gammaV_target = train_target_i[:,1]
+        cp_target = train_target_i[:,2]
+        alphaP_target = train_target_i[:,3]
+        betaT_target = train_target_i[:,4]
+        U_target = train_target_i[:,5]
+        P_target = train_target_i[:,6]
 
-        cv_target = target_i[:,0]
-        # print(cv_target)  
-        # temperature = input_i[:,0]
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
-        input_i.requires_grad = True
+        train_input_i.requires_grad = True
 
-        # Passes input through the neural net
-        output_i = self.forward(input_i)
+        # Pass input through NN to get the output
+        A = self.forward(train_input_i)
 
         # Computes gradient and hessian
-        train_gradient = self.compute_gradient(input_i)
-        train_hessian = self.compute_hessian(input_i)
-
-        # The train hessian is returned as a 4D tensor, it can be thought of a batch_size*1 matrix of 2*2 matricies
-        # print("start")
-        # print(train_hessian[:,:])
+        train_gradient = self.compute_gradient(train_input_i)
+        train_hessian = self.compute_hessian(train_input_i)
 
         dA_drho = train_gradient[:,0]
 
@@ -129,21 +137,31 @@ class BasicLightning(pl.LightningModule):
                                 :, # In all of the heassians in the batch ...
                                 1, # in the second row ...
                                 0] # return the value in the first column
-        temperature = torch.reshape(temperature,(-1,))
-        d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
-
-        cv_predicted = -temperature*d2A_dT2
-
-
-        # print("first {}".format(train_hessian[:,0]))
-        # print("second {}".format(train_hessian[:,0,0]))
-        # print("thrid {}".format(train_hessian[:,0,0,0]))
-        # Calculates loss
         
+        T = torch.reshape(T,(-1,))
+        rho = torch.reshape(rho,(-1,))
+        A = torch.reshape(A,(-1,))
+        dA_dT = torch.reshape(dA_dT,(-1,))
+        dA_drho = torch.reshape(dA_drho,(-1,))
+        d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
+        d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
 
-        # The distributed training strategy complains if the output of the forward pass isn't used in the loss function,
-        # a workaround from the PyTorch forums was to include the output but multiply it by 0 so that it has no effect on the loss
-        loss = (cv_target-cv_predicted)**2 + output_i*torch.zeros_like(output_i)      
+        S = -dA_dT
+        P_predicted = (rho**2)*dA_drho
+        U_predicted = A+T*S
+        Z = (rho*dA_drho)/T
+        cv_predicted = -T*d2A_dT2
+        dP_dT = (rho**2)*d2A_dT_drho
+        dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        alphaP_predicted = (dP_dT/rho)/dP_drho
+        rho_betaT = 1/dP_drho
+        betaT_predicted = rho_betaT/rho
+        gammaV_predicted = alphaP_predicted/betaT_predicted
+        cp_predicted = cv_predicted + (T*(alphaP_predicted**2))/(betaT_predicted*rho)
+
+        # Calculates the loss
+        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2 +(cp_target-cp_predicted)**2 #+ (alphaP_target - alphaP_predicted)**2 + (betaT_predicted-betaT_target)**2       
         mean_train_loss = torch.mean(loss)
 
         self.log("train_loss",mean_train_loss)
@@ -157,6 +175,13 @@ class BasicLightning(pl.LightningModule):
         T = val_input_i[:,1]
 
         cv_target = val_target_i[:,0]
+        gammaV_target = val_target_i[:,1]
+        cp_target = val_target_i[:,2]
+        alphaP_target = val_target_i[:,3]
+        betaT_target = val_target_i[:,4]
+        U_target = val_target_i[:,5]
+        P_target = val_target_i[:,6]
+
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         val_input_i.requires_grad = True
 
@@ -187,22 +212,35 @@ class BasicLightning(pl.LightningModule):
                                 0] # return the value in the first column
         
         T = torch.reshape(T,(-1,))
+        rho = torch.reshape(rho,(-1,))
+        A = torch.reshape(A,(-1,))
+        dA_dT = torch.reshape(dA_dT,(-1,))
+        dA_drho = torch.reshape(dA_drho,(-1,))
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
+        d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
+
         S = -dA_dT
-        P = (rho**2)*dA_drho
-        U = A+T*S
+        P_predicted = (rho**2)*dA_drho
+        U_predicted = A+T*S
         Z = (rho*dA_drho)/T
         cv_predicted = -T*d2A_dT2
         dP_dT = (rho**2)*d2A_dT_drho
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
-        alpha_predicted = (dP_dT/rho)/dP_drho
-        beta_t
-
+        alphaP_predicted = (dP_dT/rho)/dP_drho
+        rho_betaT = 1/dP_drho
+        betaT_predicted = rho_betaT/rho
+        gammaV_predicted = alphaP_predicted/betaT_predicted
+        cp_predicted = cv_predicted + (T*(alphaP_predicted**2))/(betaT_predicted*rho)
 
         # Calculates the loss
-        loss = (cv_target-cv_predicted)**2 + A*torch.zeros_like(A)  
-        mean_val_loss = torch.mean(loss)
 
+        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2 +(cp_target-cp_predicted)**2 + (alphaP_target - alphaP_predicted)**2 + (betaT_predicted-betaT_target)**2  
+        mean_val_loss = torch.mean(loss)
+        self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
+        self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
+        self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
+        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2))  
         self.log("val_loss",mean_val_loss) 
         return {"val_loss": mean_val_loss}
     
@@ -261,10 +299,18 @@ def train_func(config):
     # Splitting the preprocessed data into the inputs and targets
     density_column = 4
     temperature_column = 2
+    pressure_column = 3
+    internal_energy_column = 1
+    cv_column = 20
+    gammaV_column = cv_column + 1
+    cp_column = gammaV_column + 1
+    alphaP_column = cp_column + 1
+    betaT_column = alphaP_column + 1
+    target_columns = [cv_column,gammaV_column,cp_column,alphaP_column,betaT_column,internal_energy_column,pressure_column]
     train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
-    train_targets = torch.tensor(train_arr[:,[20]])
+    train_targets = torch.tensor(train_arr[:,target_columns])
     val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
-    val_targets = torch.tensor(val_arr[:,[20]])
+    val_targets = torch.tensor(val_arr[:,target_columns])
     train_inputs = train_inputs.float()
     train_targets = train_targets.float()
     val_inputs = val_inputs.float()
@@ -309,7 +355,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":3})
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
@@ -330,7 +376,7 @@ trainer = TorchTrainer(
 def tune_asha(num_samples,max_number_of_training_epochs):
 
     lower_limit_of_neurons_per_layer = 10
-    upper_limit_of_neurons_per_layer = 1000
+    upper_limit_of_neurons_per_layer = 20
 
     # Create distribution of integer values for the number of neurons per layer
     layer_size_dist = tune.randint(lower_limit_of_neurons_per_layer,upper_limit_of_neurons_per_layer)
@@ -338,12 +384,12 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-5, 1e-3),
+                    "lr": tune.loguniform(1e-4, 1e-2),
                     "weight_decay_coefficient":tune.uniform(1e-6,1e-2)
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
-    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=500, reduction_factor=2)
+    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=1000, reduction_factor=2)
 
     # Use Particle swarm optimisation for hyperparameter tuning from the Nevergrad package
     algo = NevergradSearch(optimizer=ng.optimizers.PSO,
