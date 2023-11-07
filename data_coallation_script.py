@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import re
 import sys
-path_to_results = r"/home/daniel/Downloads/LJ-2d-md-results"
+path_to_results = r"/home/daniel/Downloads/LJ-2d-md-results/"
 Na = 6.02*10**23
 #Kb = 1.380649*(10**-23)
 Kb = 1 # Reduced Units?
@@ -144,11 +144,14 @@ def script(path_to_results):
     '''
     NVT_results_filename = "nvtave.lammps"
     NPT_results_filename = "nptave.lammps"
-    NPT_NVT_convergence_tolerance = 1e-4
+    NPT_NVT_convergence_tolerance = 1e-2
     # Creating numpy arrays with the correct dimensions to append the results to
     array_size = (1,25)
     coallated_properties = np.zeros(array_size)
     for (root,dirs,files) in os.walk(path_to_results, topdown=True):
+        # print(path_to_results)
+        # print(root)
+        # print(files)
         derivative_properties = []
         mean_NVT_results = np.zeros((1,1))
         mean_NPT_results = np.zeros((1,1))
@@ -156,6 +159,7 @@ def script(path_to_results):
             if (filename == NVT_results_filename):
                 # Separate the folder structure into individual items in a list
                 split_root_folder_structure = str.split(root,sep="/")
+                # print(split_root_folder_structure)
 
                 # Index the folder structure where the foldername that contains the temperature and density 
                 temp_and_density_foldername = split_root_folder_structure[5]
@@ -194,13 +198,13 @@ def script(path_to_results):
 
                 cv = isochoric_heat_capacity(number_of_particles,potential_energy,temperature)
                 gamma_v = thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
+
                 derivative_properties.append(cv)
                 derivative_properties.append(gamma_v)
 
             if filename== NPT_results_filename:
                  # Separate the folder structure into individual items in a list
                 split_root_folder_structure = str.split(root,sep="/")
-
                 # Index the folder structure where the foldername that contains the temperature and density 
                 temp_and_density_foldername = split_root_folder_structure[5]
 
@@ -249,7 +253,7 @@ def script(path_to_results):
         # if the derivative_properties list is less than 5, the NPT or NVT results for a run were not computed thus the run should be skipped
         if (not derivative_properties) or (len(derivative_properties) < 5 ):
             continue
-
+        print(derivative_properties)
         npt_nvt_derivative_results = np.concatenate((mean_NPT_results,mean_NVT_results,derivative_properties))
         coallated_properties=np.append(coallated_properties,[npt_nvt_derivative_results],axis=0)
 
@@ -275,7 +279,10 @@ def script(path_to_results):
     strings_to_log = ["Number of runs before NPT NVT convergence check: {}".format(len(coallated_properties)),
                       "Number of runs after NPT NVT convergence check: {}".format(len(coallated_properties_with_removed_invalid_densities_and_temperatures))
                       ]
+    
     with open('log.txt', 'w') as f:
         f.write("\n".join(strings_to_log))
+        
+    np.savetxt("coallated_results.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
 
 script(path_to_results)
