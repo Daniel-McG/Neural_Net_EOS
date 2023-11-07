@@ -90,8 +90,10 @@ class BasicLightning(pl.LightningModule):
 
         # Unpacks trauning batch
         input_i,target_i = train_batch
-        temperature = input_i[:,0]
-        density = input_i[:,1]
+        density = input_i[:,0]
+        temperature = input_i[:,1]
+
+
         cv_target = target_i[:,0]
         # print(cv_target)  
         # temperature = input_i[:,0]
@@ -109,6 +111,10 @@ class BasicLightning(pl.LightningModule):
         # print("start")
         # print(train_hessian[:,:])
 
+        dA_drho = train_gradient[:,0]
+
+        dA_dT = train_gradient[:,1]
+
         d2A_drho2= train_hessian[:, # In all of the hessians in the batch ...
                                  :, # In all of the heassians in the batch ...
                                  0, # in the first row ...
@@ -124,9 +130,9 @@ class BasicLightning(pl.LightningModule):
                                 1, # in the second row ...
                                 0] # return the value in the first column
         temperature = torch.reshape(temperature,(-1,))
-        d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
 
-        cv_predicted = -temperature*d2A_drho2
+        cv_predicted = -temperature*d2A_dT2
 
 
         # print("first {}".format(train_hessian[:,0]))
@@ -134,6 +140,9 @@ class BasicLightning(pl.LightningModule):
         # print("thrid {}".format(train_hessian[:,0,0,0]))
         # Calculates loss
         
+
+        # The distributed training strategy complains if the output of the forward pass isn't used in the loss function,
+        # a workaround from the PyTorch forums was to include the output but multiply it by 0 so that it has no effect on the loss
         loss = (cv_target-cv_predicted)**2 + output_i*torch.zeros_like(output_i)      
         mean_train_loss = torch.mean(loss)
 
@@ -144,19 +153,54 @@ class BasicLightning(pl.LightningModule):
 
         # Unpack validation batch
         val_input_i, val_target_i = val_batch
+        rho = val_input_i[:,0]
+        T = val_input_i[:,1]
 
+        cv_target = val_target_i[:,0]
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         val_input_i.requires_grad = True
 
         # Pass input through NN to get the output
-        val_output_i = self.forward(val_input_i)
+        A = self.forward(val_input_i)
 
         # Computes gradient and hessian
-        # val_gradient = self.compute_gradient(val_input_i)
-        # val_hessian = self.compute_hessian(val_input_i)
+        val_gradient = self.compute_gradient(val_input_i)
+        val_hessian = self.compute_hessian(val_input_i)
+
+        dA_drho = val_gradient[:,0]
+
+        dA_dT = val_gradient[:,1]
+
+        d2A_drho2= val_hessian[:, # In all of the hessians in the batch ...
+                                 :, # In all of the heassians in the batch ...
+                                 0, # in the first row ...
+                                 0] # return the value in the first column
+        
+        d2A_dT2 = val_hessian[:, # In all of the hessians in the batch ...
+                                :, # In all of the heassians in the batch ...
+                                1, # in the second row ...
+                                1] # return the value in the second column
+        
+        d2A_dT_drho = val_hessian[:, # In all of the hessians in the batch ...
+                                :, # In all of the heassians in the batch ...
+                                1, # in the second row ...
+                                0] # return the value in the first column
+        
+        T = torch.reshape(T,(-1,))
+        d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
+        S = -dA_dT
+        P = (rho**2)*dA_drho
+        U = A+T*S
+        Z = (rho*dA_drho)/T
+        cv_predicted = -T*d2A_dT2
+        dP_dT = (rho**2)*d2A_dT_drho
+        dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        alpha_predicted = (dP_dT/rho)/dP_drho
+        beta_t
+
 
         # Calculates the loss
-        loss = (val_output_i-val_target_i)**2
+        loss = (cv_target-cv_predicted)**2 + A*torch.zeros_like(A)  
         mean_val_loss = torch.mean(loss)
 
         self.log("val_loss",mean_val_loss) 
@@ -184,7 +228,7 @@ class BasicLightning(pl.LightningModule):
                                        grad_outputs=torch.ones_like(self.forward(inputs)),
                                        retain_graph=True,
                                        create_graph=True
-                                       )
+                                       )[0]
         return gradient
     
     def compute_hessian(self, x):
@@ -192,6 +236,9 @@ class BasicLightning(pl.LightningModule):
         # Compute the hessian of the output wrt the input
         hessians = torch.vmap(torch.func.hessian(self.forward), (0))(x)
         return hessians
+    
+    def cv_from_ann(temperature,d2A_drho2):
+        -temperature*d2A_drho2
                                                                                                                            
 
 def train_func(config):
@@ -214,7 +261,6 @@ def train_func(config):
     # Splitting the preprocessed data into the inputs and targets
     density_column = 4
     temperature_column = 2
-    cv_column = len
     train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
     train_targets = torch.tensor(train_arr[:,[20]])
     val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
@@ -228,7 +274,7 @@ def train_func(config):
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
     train_dataloader = DataLoader(train_dataset,batch_size = 6000)
-    val_dataloader = DataLoader(val_Dataset,batch_size =6000)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 6000)
 
     # Instantiating the neural network
     model = BasicLightning(config)
@@ -321,7 +367,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
 
 
 # Define the number of tuning experiments to run
-num_samples = 1
+num_samples = 100
 
 results = tune_asha(num_samples,max_number_of_training_epochs)
 results.get_best_result(metric="val_loss", mode="min")
