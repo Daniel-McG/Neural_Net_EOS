@@ -32,7 +32,7 @@ max_number_of_training_epochs = 20000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=True)
+ray.init(log_to_driver=False)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -161,7 +161,7 @@ class BasicLightning(pl.LightningModule):
         cp_predicted = cv_predicted + (T*(alphaP_predicted**2))/(betaT_predicted*rho)
 
         # Calculates the loss
-        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2 +(cp_target-cp_predicted)**2 #+ (alphaP_target - alphaP_predicted)**2 + (betaT_predicted-betaT_target)**2       
+        loss = A*torch.zeros_like(A) + ((P_predicted-P_target)/P_target)**2 + ((cv_target-cv_predicted)/cv_target)**2 + ((gammaV_target-gammaV_predicted)/gammaV_target)**2 + ((U_target-U_predicted)/U_target)**2  + ((alphaP_target - alphaP_predicted)/alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2       
         mean_train_loss = torch.mean(loss)
 
         self.log("train_loss",mean_train_loss)
@@ -235,7 +235,7 @@ class BasicLightning(pl.LightningModule):
 
         # Calculates the loss
 
-        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2 +(cp_target-cp_predicted)**2 + (alphaP_target - alphaP_predicted)**2 + (betaT_predicted-betaT_target)**2  
+        loss = A*torch.zeros_like(A) + ((P_predicted-P_target)/P_target)**2 + ((cv_target-cv_predicted)/cv_target)**2 + ((gammaV_target-gammaV_predicted)/gammaV_target)**2 + ((U_target-U_predicted)/U_target)**2  + ((alphaP_target - alphaP_predicted)/alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2   
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
         self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
@@ -355,7 +355,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":3})
+scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
@@ -375,8 +375,8 @@ trainer = TorchTrainer(
 
 def tune_asha(num_samples,max_number_of_training_epochs):
 
-    lower_limit_of_neurons_per_layer = 10
-    upper_limit_of_neurons_per_layer = 20
+    lower_limit_of_neurons_per_layer = 200
+    upper_limit_of_neurons_per_layer = 1000
 
     # Create distribution of integer values for the number of neurons per layer
     layer_size_dist = tune.randint(lower_limit_of_neurons_per_layer,upper_limit_of_neurons_per_layer)
@@ -384,7 +384,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-4, 1e-2),
+                    "lr": tune.loguniform(1e-5, 1e-3),
                     "weight_decay_coefficient":tune.uniform(1e-6,1e-2)
                     }
 
@@ -413,7 +413,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
 
 
 # Define the number of tuning experiments to run
-num_samples = 100
+num_samples = 100000
 
 results = tune_asha(num_samples,max_number_of_training_epochs)
 results.get_best_result(metric="val_loss", mode="min")
