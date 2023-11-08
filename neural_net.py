@@ -161,7 +161,7 @@ class BasicLightning(pl.LightningModule):
         cp_predicted = cv_predicted + (T*(alphaP_predicted**2))/(betaT_predicted*rho)
 
         # Calculates the loss
-        loss = A*torch.zeros_like(A) + ((P_predicted-P_target)/P_target)**2 + ((cv_target-cv_predicted)/cv_target)**2 + ((gammaV_target-gammaV_predicted)/gammaV_target)**2 + ((U_target-U_predicted)/U_target)**2  + ((alphaP_target - alphaP_predicted)/alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2       
+        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2  + (alphaP_target - alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2       
         mean_train_loss = torch.mean(loss)
 
         self.log("train_loss",mean_train_loss)
@@ -235,7 +235,7 @@ class BasicLightning(pl.LightningModule):
 
         # Calculates the loss
 
-        loss = A*torch.zeros_like(A) + ((P_predicted-P_target)/P_target)**2 + ((cv_target-cv_predicted)/cv_target)**2 + ((gammaV_target-gammaV_predicted)/gammaV_target)**2 + ((U_target-U_predicted)/U_target)**2  + ((alphaP_target - alphaP_predicted)/alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2   
+        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2  + (alphaP_target - alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2   
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
         self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
@@ -375,7 +375,7 @@ trainer = TorchTrainer(
 
 def tune_asha(num_samples,max_number_of_training_epochs):
 
-    lower_limit_of_neurons_per_layer = 200
+    lower_limit_of_neurons_per_layer = 1000
     upper_limit_of_neurons_per_layer = 1000
 
     # Create distribution of integer values for the number of neurons per layer
