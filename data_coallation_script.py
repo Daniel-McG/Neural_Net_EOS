@@ -134,7 +134,14 @@ def inital_property_check(initial_temperature,temperature_vector,initial_density
     if temperature_difference > tolerance:
         print("T {} {}".format(initial_density,initial_temperature))
     if density_difference > tolerance:
-        print("D {} {}".format(initial_density,initial_temperature))                      
+        print("D {} {}".format(initial_density,initial_temperature))   
+
+def joule_thompson(rho,T,Cp,alpha_p):
+    T = np.mean(T)
+    rho = np.mean(rho)
+    JT = (1/(rho*Cp))*(T*alpha_p-1)
+    return JT
+               
 
 
 def script(path_to_results):
@@ -146,7 +153,7 @@ def script(path_to_results):
     NPT_results_filename = "nptave.lammps"
     NPT_NVT_convergence_tolerance = 1e-2
     # Creating numpy arrays with the correct dimensions to append the results to
-    array_size = (1,25)
+    array_size = (1,27)
     coallated_properties = np.zeros(array_size)
     for (root,dirs,files) in os.walk(path_to_results, topdown=True):
         # print(path_to_results)
@@ -198,7 +205,6 @@ def script(path_to_results):
 
                 cv = isochoric_heat_capacity(number_of_particles,potential_energy,temperature)
                 gamma_v = thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
-
                 derivative_properties.append(cv)
                 derivative_properties.append(gamma_v)
 
@@ -245,13 +251,17 @@ def script(path_to_results):
                 cp = isobaric_heat_capacity(total_energy,number_of_particles,pressure,volume,temperature)
                 alpha_p = thermal_expansion_coefficient(total_energy,pressure,temperature,volume,number_of_particles)
                 beta_t = isothermal_compressibility(volume,temperature)
+                mu_jt = joule_thompson(density,temperature,cp,alpha_p)
+                Z = compressibility_factor(pressure,density,temperature)
                 derivative_properties.append(cp)
                 derivative_properties.append(alpha_p)
                 derivative_properties.append(beta_t)
+                derivative_properties.append(mu_jt)
+                derivative_properties.append(Z)
 
         # if the derivatives properties array is empty or or doesnt have the correct nmber of proeprties, dont write the data out
-        # if the derivative_properties list is less than 5, the NPT or NVT results for a run were not computed thus the run should be skipped
-        if (not derivative_properties) or (len(derivative_properties) < 5 ):
+        # if the derivative_properties list is less than 7, the NPT or NVT results for a run were not computed thus the run should be skipped
+        if (not derivative_properties) or (len(derivative_properties) < 7 ):
             continue
         print(derivative_properties)
         npt_nvt_derivative_results = np.concatenate((mean_NPT_results,mean_NVT_results,derivative_properties))
