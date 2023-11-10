@@ -32,7 +32,7 @@ max_number_of_training_epochs = 20000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=False)
+ray.init(log_to_driver=True)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -55,8 +55,6 @@ class BasicLightning(pl.LightningModule):
           nn.Tanh(),
           nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.layer_size,self.layer_size),
-          nn.Tanh(),
           nn.Linear(self.layer_size ,self.layer_size),
           nn.Tanh(),
           nn.Linear(self.layer_size ,self.layer_size),
@@ -72,6 +70,8 @@ class BasicLightning(pl.LightningModule):
         '''
         Passes the input x through the neural network and returns the output
         '''
+
+        
         out = self.layers_stack(x)
         return out
     
@@ -79,10 +79,9 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr,weight_decay=self.weight_decay_coefficient)
+        optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
         current_lr = scheduler.get_last_lr()
-        print(current_lr)
         output_dict = {
         "optimizer": optimiser,
         "lr_scheduler": {"scheduler":scheduler}
@@ -100,7 +99,6 @@ class BasicLightning(pl.LightningModule):
         train_input_i, train_target_i = train_batch
         rho = train_input_i[:,0]
         T = train_input_i[:,1]
-
         cv_target = train_target_i[:,0]
         gammaV_target = train_target_i[:,1]
         cp_target = train_target_i[:,2]
@@ -108,6 +106,17 @@ class BasicLightning(pl.LightningModule):
         betaT_target = train_target_i[:,4]
         U_target = train_target_i[:,5]
         P_target = train_target_i[:,6]
+        mu_jt_target = train_target_i[:,7]
+        Z_target = train_target_i[:,8]
+        adiabatic_index_target = cp_target/cv_target
+        var_cv = self.calculate_variance(cv_target)
+        var_Z = self.calculate_variance(Z_target)
+        var_U = self.calculate_variance(U_target)
+        var_gammaV = self.calculate_variance(gammaV_target)
+        var_rho_betaT = self.calculate_variance(rho*betaT_target)
+        var_alphaP = self.calculate_variance(alphaP_target)
+        var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
+        var_mu_jt = self.calculate_variance(mu_jt_target)
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         train_input_i.requires_grad = True
@@ -149,22 +158,34 @@ class BasicLightning(pl.LightningModule):
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
-        U_predicted = A+T*S
+        U_predicted = A+(T*S)
         Z = (rho*dA_drho)/T
         cv_predicted = -T*d2A_dT2
         dP_dT = (rho**2)*d2A_dT_drho
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
-        alphaP_predicted = (dP_dT/rho)/dP_drho
-        rho_betaT = 1/dP_drho
-        betaT_predicted = rho_betaT/rho
+        alphaP_predicted = (dP_dT)/(rho*dP_drho)
+        rho_betaT_predicted = 1/dP_drho
+        betaT_predicted = torch.reciprocal(rho*dP_drho)
         gammaV_predicted = alphaP_predicted/betaT_predicted
-        cp_predicted = cv_predicted + (T*(alphaP_predicted**2))/(betaT_predicted*rho)
-
+        cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
+        mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
+        Z_predicted = P_predicted/(rho*T)
+        adiabatic_index_predicted = cp_predicted/cv_predicted
         # Calculates the loss
-        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2  + (alphaP_target - alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2       
+
+        loss = A*torch.zeros_like(A) \
+            + ((Z_target-Z_predicted)**2)/var_Z \
+            + ((U_target-U_predicted)**2)/var_U \
+            + ((cv_target-cv_predicted)**2)/var_cv \
+            + ((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + ((rho*betaT_target-rho_betaT_predicted)**2)/var_rho_betaT \
+            + ((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + ((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            + ((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+        
         mean_train_loss = torch.mean(loss)
 
-        self.log("train_loss",mean_train_loss)
+        self.log("train_loss",mean_train_loss,sync_dist=True)
         return {"loss": mean_train_loss}
     
     def validation_step(self, val_batch, batch_idx):
@@ -173,7 +194,6 @@ class BasicLightning(pl.LightningModule):
         val_input_i, val_target_i = val_batch
         rho = val_input_i[:,0]
         T = val_input_i[:,1]
-
         cv_target = val_target_i[:,0]
         gammaV_target = val_target_i[:,1]
         cp_target = val_target_i[:,2]
@@ -181,6 +201,18 @@ class BasicLightning(pl.LightningModule):
         betaT_target = val_target_i[:,4]
         U_target = val_target_i[:,5]
         P_target = val_target_i[:,6]
+        mu_jt_target = val_target_i[:,7]
+        Z_target = val_target_i[:,8]
+        adiabatic_index_target = cp_target/cv_target
+
+        var_cv = self.calculate_variance(cv_target)
+        var_Z = self.calculate_variance(Z_target)
+        var_U = self.calculate_variance(U_target)
+        var_gammaV = self.calculate_variance(gammaV_target)
+        var_rho_betaT = self.calculate_variance(rho*betaT_target)
+        var_alphaP = self.calculate_variance(alphaP_target)
+        var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
+        var_mu_jt = self.calculate_variance(mu_jt_target)
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         val_input_i.requires_grad = True
@@ -222,26 +254,37 @@ class BasicLightning(pl.LightningModule):
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
-        U_predicted = A+T*S
+        U_predicted = A+(T*S)
         Z = (rho*dA_drho)/T
         cv_predicted = -T*d2A_dT2
         dP_dT = (rho**2)*d2A_dT_drho
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
-        alphaP_predicted = (dP_dT/rho)/dP_drho
+        alphaP_predicted = (dP_dT)/(rho*dP_drho)
         rho_betaT = 1/dP_drho
-        betaT_predicted = rho_betaT/rho
+        betaT_predicted = torch.reciprocal(rho*dP_drho)
         gammaV_predicted = alphaP_predicted/betaT_predicted
-        cp_predicted = cv_predicted + (T*(alphaP_predicted**2))/(betaT_predicted*rho)
-
+        cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
+        mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
+        Z_predicted = P_predicted/(rho*T)
+        adiabatic_index_predicted = cp_predicted/cv_predicted
         # Calculates the loss
 
-        loss = A*torch.zeros_like(A) + (P_predicted-P_target)**2 + (cv_target-cv_predicted)**2 + (gammaV_target-gammaV_predicted)**2 + (U_target-U_predicted)**2  + (alphaP_target - alphaP_predicted)**2 #+ (betaT_predicted-betaT_target)**2 +(cp_target-cp_predicted)**2   
+        loss = A*torch.zeros_like(A) \
+            + ((Z_target-Z_predicted)**2)/var_Z \
+            + ((U_target-U_predicted)**2)/var_U \
+            + ((cv_target-cv_predicted)**2)/var_cv \
+            + ((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + ((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            + ((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + ((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            + ((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+        
         mean_val_loss = torch.mean(loss)
-        self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
-        self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
-        self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
-        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2))  
-        self.log("val_loss",mean_val_loss) 
+        self.log("val_P_loss",torch.mean((P_predicted-P_target)**2),sync_dist=True) 
+        self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)),sync_dist=True)
+        self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2),sync_dist=True)
+        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2),sync_dist=True)  
+        self.log("val_loss",mean_val_loss,sync_dist=True) 
         return {"val_loss": mean_val_loss}
     
     def backward(self, loss):
@@ -273,10 +316,12 @@ class BasicLightning(pl.LightningModule):
         
         # Compute the hessian of the output wrt the input
         hessians = torch.vmap(torch.func.hessian(self.forward), (0))(x)
+        # hessians = torch.func.hessian(self.forward)(x)
         return hessians
     
-    def cv_from_ann(temperature,d2A_drho2):
-        -temperature*d2A_drho2
+    def calculate_variance(self, Tensor_to_calculate_variance):
+        variance = torch.var(torch.reshape(Tensor_to_calculate_variance,(-1,)))
+        return variance
                                                                                                                            
 
 def train_func(config):
@@ -291,7 +336,7 @@ def train_func(config):
     # Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
     # very far from the typical 0-1 range we want for training a neural network
 
-    train_df,test_df = train_test_split(data_df,train_size=0.6)
+    train_df,test_df = train_test_split(data_df,train_size=0.7)
 
     train_arr = train_df.values
     val_arr = test_df.values
@@ -306,7 +351,9 @@ def train_func(config):
     cp_column = gammaV_column + 1
     alphaP_column = cp_column + 1
     betaT_column = alphaP_column + 1
-    target_columns = [cv_column,gammaV_column,cp_column,alphaP_column,betaT_column,internal_energy_column,pressure_column]
+    mu_jt_column = betaT_column + 1
+    Z_column = mu_jt_column + 1
+    target_columns = [cv_column,gammaV_column,cp_column,alphaP_column,betaT_column,internal_energy_column,pressure_column,mu_jt_column,Z_column]
     train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
     train_targets = torch.tensor(train_arr[:,target_columns])
     val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
@@ -319,8 +366,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 6000)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 6000)
+    train_dataloader = DataLoader(train_dataset,batch_size = 10000)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 10000)
 
     # Instantiating the neural network
     model = BasicLightning(config)
@@ -328,7 +375,7 @@ def train_func(config):
     trainer = pl.Trainer(
         # Define the max number of epochs for the trainer, this is also enforced by the scheduler.
         max_epochs=max_number_of_training_epochs,
-
+        gradient_clip_val=0.01,
         # Use GPU if available
         devices="auto",
         accelerator="auto",
@@ -375,7 +422,7 @@ trainer = TorchTrainer(
 
 def tune_asha(num_samples,max_number_of_training_epochs):
 
-    lower_limit_of_neurons_per_layer = 1000
+    lower_limit_of_neurons_per_layer = 100
     upper_limit_of_neurons_per_layer = 1000
 
     # Create distribution of integer values for the number of neurons per layer
@@ -413,7 +460,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
 
 
 # Define the number of tuning experiments to run
-num_samples = 100000
+num_samples = 1000
 
 results = tune_asha(num_samples,max_number_of_training_epochs)
 results.get_best_result(metric="val_loss", mode="min")
