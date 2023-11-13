@@ -32,7 +32,7 @@ max_number_of_training_epochs = 20000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=True)
+ray.init(log_to_driver = False)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -47,7 +47,6 @@ class BasicLightning(pl.LightningModule):
         self.lr = config["lr"]
         self.batch_size = 6000
         self.layer_size = config["layer_size"]
-        self.weight_decay_coefficient = config["weight_decay_coefficient"]
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -70,8 +69,6 @@ class BasicLightning(pl.LightningModule):
         '''
         Passes the input x through the neural network and returns the output
         '''
-
-        
         out = self.layers_stack(x)
         return out
     
@@ -79,9 +76,8 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
-        current_lr = scheduler.get_last_lr()
+        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,2000)
         output_dict = {
         "optimizer": optimiser,
         "lr_scheduler": {"scheduler":scheduler}
@@ -174,14 +170,14 @@ class BasicLightning(pl.LightningModule):
         # Calculates the loss
 
         loss = A*torch.zeros_like(A) \
-            + ((Z_target-Z_predicted)**2)/var_Z \
-            + ((U_target-U_predicted)**2)/var_U \
-            + ((cv_target-cv_predicted)**2)/var_cv \
-            + ((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + ((rho*betaT_target-rho_betaT_predicted)**2)/var_rho_betaT \
-            + ((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            + ((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            + ((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + ((Z_target-Z_predicted)**2)/var_Z #\  
+            # + ((U_target-U_predicted)**2)/var_U \
+            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
         mean_train_loss = torch.mean(loss)
 
@@ -260,7 +256,7 @@ class BasicLightning(pl.LightningModule):
         dP_dT = (rho**2)*d2A_dT_drho
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
         alphaP_predicted = (dP_dT)/(rho*dP_drho)
-        rho_betaT = 1/dP_drho
+        rho_betaT_predicted = 1/dP_drho
         betaT_predicted = torch.reciprocal(rho*dP_drho)
         gammaV_predicted = alphaP_predicted/betaT_predicted
         cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
@@ -271,13 +267,13 @@ class BasicLightning(pl.LightningModule):
 
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
-            + ((U_target-U_predicted)**2)/var_U \
-            + ((cv_target-cv_predicted)**2)/var_cv \
-            + ((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + ((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            + ((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            + ((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            + ((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            # + ((U_target-U_predicted)**2)/var_U \
+            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2),sync_dist=True) 
@@ -375,7 +371,6 @@ def train_func(config):
     trainer = pl.Trainer(
         # Define the max number of epochs for the trainer, this is also enforced by the scheduler.
         max_epochs=max_number_of_training_epochs,
-        gradient_clip_val=0.01,
         # Use GPU if available
         devices="auto",
         accelerator="auto",
@@ -389,7 +384,7 @@ def train_func(config):
                    RayTrainReportCallback(),
 
                    # Monitor the validation loss and if its not decreasing for more than 500 epochs, terminate the training.
-                   EarlyStopping(monitor="val_loss",mode="min",patience=500)
+                   EarlyStopping(monitor="val_loss",mode="min",patience=2000)
                    ],
         plugins=[RayLightningEnvironment()],
 
@@ -402,7 +397,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":6})
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
@@ -423,7 +418,7 @@ trainer = TorchTrainer(
 def tune_asha(num_samples,max_number_of_training_epochs):
 
     lower_limit_of_neurons_per_layer = 100
-    upper_limit_of_neurons_per_layer = 1000
+    upper_limit_of_neurons_per_layer = 102
 
     # Create distribution of integer values for the number of neurons per layer
     layer_size_dist = tune.randint(lower_limit_of_neurons_per_layer,upper_limit_of_neurons_per_layer)
@@ -431,8 +426,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-5, 1e-3),
-                    "weight_decay_coefficient":tune.uniform(1e-6,1e-2)
+                    "lr": tune.loguniform(1e-6, 2e-6),
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
