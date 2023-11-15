@@ -32,7 +32,7 @@ max_number_of_training_epochs = 20000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=False)
+ray.init(log_to_driver=True)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -111,6 +111,7 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = train_target_i[:,7]
         Z_target = train_target_i[:,8]
         adiabatic_index_target = cp_target/cv_target
+        print(rho*betaT_target)
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
@@ -156,7 +157,7 @@ class BasicLightning(pl.LightningModule):
         dA_drho = torch.reshape(dA_drho,(-1,))
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
@@ -178,12 +179,12 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            + ((cv_target-cv_predicted)**2)/var_cv \
-            + ((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + ((rho*betaT_target-rho_betaT_predicted)**2)/var_rho_betaT \
-            + ((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            + ((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            + ((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
         mean_train_loss = torch.mean(loss)
 
@@ -253,7 +254,7 @@ class BasicLightning(pl.LightningModule):
         dA_drho = torch.reshape(dA_drho,(-1,))
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
@@ -275,12 +276,12 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            + ((cv_target-cv_predicted)**2)/var_cv \
-            + ((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + ((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            + ((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            + ((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            + ((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
@@ -328,7 +329,7 @@ class BasicLightning(pl.LightningModule):
 
 def train_func(config):
     # Read data from csv
-    data_df = pd.read_csv('/rds/general/user/dcm120/home/coallated_results.txt',delimiter=" ")
+    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results.txt',delimiter=" ")
     # Preprocessing the data
 
     # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -404,7 +405,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(

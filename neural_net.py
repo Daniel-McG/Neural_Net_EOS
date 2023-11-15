@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import pandas as pd
@@ -32,7 +33,7 @@ max_number_of_training_epochs = 20000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver = False)
+ray.init(log_to_driver = True)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -76,8 +77,8 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,2000)
+        optimiser = torch.optim.SGD(self.parameters(),lr = self.lr,momentum=0.5)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
         output_dict = {
         "optimizer": optimiser,
         "lr_scheduler": {"scheduler":scheduler}
@@ -150,8 +151,8 @@ class BasicLightning(pl.LightningModule):
         dA_drho = torch.reshape(dA_drho,(-1,))
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
-
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
+        # print(T,rho,A,dA_dT,dA_drho,d2A_drho2,d2A_dT2,d2A_drho2,d2A_dT_drho)
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
         U_predicted = A+(T*S)
@@ -167,17 +168,15 @@ class BasicLightning(pl.LightningModule):
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
         Z_predicted = P_predicted/(rho*T)
         adiabatic_index_predicted = cp_predicted/cv_predicted
+
+        
         # Calculates the loss
 
         loss = A*torch.zeros_like(A) \
-            + ((Z_target-Z_predicted)**2)/var_Z #\  
-            # + ((U_target-U_predicted)**2)/var_U \
-            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + ((Z_target-Z_predicted)**2)/var_Z + ((U_target-U_predicted)**2)/var_U \
+            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
         
         mean_train_loss = torch.mean(loss)
 
@@ -200,6 +199,7 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = val_target_i[:,7]
         Z_target = val_target_i[:,8]
         adiabatic_index_target = cp_target/cv_target
+
 
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
@@ -243,10 +243,14 @@ class BasicLightning(pl.LightningModule):
         rho = torch.reshape(rho,(-1,))
         A = torch.reshape(A,(-1,))
         dA_dT = torch.reshape(dA_dT,(-1,))
+        
         dA_drho = torch.reshape(dA_drho,(-1,))
+
+
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
+
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
@@ -264,16 +268,12 @@ class BasicLightning(pl.LightningModule):
         Z_predicted = P_predicted/(rho*T)
         adiabatic_index_predicted = cp_predicted/cv_predicted
         # Calculates the loss
-
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
-            # + ((U_target-U_predicted)**2)/var_U \
-            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + ((U_target-U_predicted)**2)/var_U \
+            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2),sync_dist=True) 
@@ -312,7 +312,6 @@ class BasicLightning(pl.LightningModule):
         
         # Compute the hessian of the output wrt the input
         hessians = torch.vmap(torch.func.hessian(self.forward), (0))(x)
-        # hessians = torch.func.hessian(self.forward)(x)
         return hessians
     
     def calculate_variance(self, Tensor_to_calculate_variance):
@@ -384,7 +383,7 @@ def train_func(config):
                    RayTrainReportCallback(),
 
                    # Monitor the validation loss and if its not decreasing for more than 500 epochs, terminate the training.
-                   EarlyStopping(monitor="val_loss",mode="min",patience=2000)
+                   EarlyStopping(monitor="val_loss",mode="min",patience=10000)
                    ],
         plugins=[RayLightningEnvironment()],
 
@@ -397,7 +396,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":6})
+scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
@@ -430,7 +429,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
-    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=1000, reduction_factor=2)
+    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=10000, reduction_factor=2)
 
     # Use Particle swarm optimisation for hyperparameter tuning from the Nevergrad package
     algo = NevergradSearch(optimizer=ng.optimizers.PSO,
