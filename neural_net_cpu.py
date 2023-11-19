@@ -173,11 +173,7 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((P_target-P_predicted)**2)/var_P \
             + ((U_target-U_predicted)**2)/var_U \
-            + ((Z_target-Z_predicted)**2)/var_Z \
-            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
             # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
             # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
@@ -272,11 +268,7 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((P_target-P_predicted)**2)/var_P \
             + ((U_target-U_predicted)**2)/var_U \
-            + ((Z_target-Z_predicted)**2)/var_Z \
-            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
             # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
             # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
@@ -431,8 +423,8 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-4, 1.1e-4),
-                    "weight_decay_coefficient":tune.uniform(1e-4,1.1e-4)
+                    "lr": tune.loguniform(1e-5, 1.1e-5),
+                    "weight_decay_coefficient":tune.uniform(1e-6,1.1e-6)
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
