@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import pandas as pd
@@ -27,7 +28,7 @@ from ray.train.lightning import (RayDDPStrategy,
 from ray.tune import CLIReporter
 
 
-max_number_of_training_epochs = 20000
+max_number_of_training_epochs = 2000000
 
 
 reporter = CLIReporter(max_progress_rows=5)
@@ -57,14 +58,6 @@ class BasicLightning(pl.LightningModule):
           nn.Tanh(),
           nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.layer_size ,self.layer_size),
-          nn.Tanh(),
-          nn.Linear(self.layer_size ,self.layer_size),
-          nn.Tanh(),
-          nn.Linear(self.layer_size,self.layer_size),
-          nn.Tanh(),
-          nn.Linear(self.layer_size,self.layer_size),
-          nn.Tanh(),
           nn.Linear(self.layer_size,1),
         )
 
@@ -79,15 +72,16 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr,weight_decay=self.weight_decay_coefficient)
+        optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
-        current_lr = scheduler.get_last_lr()
-        print(current_lr)
+
+
         output_dict = {
         "optimizer": optimiser,
         "lr_scheduler": {"scheduler":scheduler}
         }
         return output_dict
+
     
     def training_step(self,train_batch,batch_index):
         '''
@@ -111,7 +105,6 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = train_target_i[:,7]
         Z_target = train_target_i[:,8]
         adiabatic_index_target = cp_target/cv_target
-        print(rho*betaT_target)
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
@@ -120,6 +113,7 @@ class BasicLightning(pl.LightningModule):
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
+        var_P = self.calculate_variance(P_target)
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         train_input_i.requires_grad = True
@@ -177,14 +171,15 @@ class BasicLightning(pl.LightningModule):
         # Calculates the loss
 
         loss = A*torch.zeros_like(A) \
-            + ((Z_target-Z_predicted)**2)/var_Z \
+            + ((P_target-P_predicted)**2)/var_P \
             + ((U_target-U_predicted)**2)/var_U \
-            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + ((Z_target-Z_predicted)**2)/var_Z \
+            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
         mean_train_loss = torch.mean(loss)
 
@@ -208,7 +203,7 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = val_target_i[:,7]
         Z_target = val_target_i[:,8]
         adiabatic_index_target = cp_target/cv_target
-
+        np.save
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
@@ -217,6 +212,7 @@ class BasicLightning(pl.LightningModule):
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
+        var_P = self.calculate_variance(P_target)
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         val_input_i.requires_grad = True
@@ -274,14 +270,15 @@ class BasicLightning(pl.LightningModule):
         # Calculates the loss
 
         loss = A*torch.zeros_like(A) \
-            + ((Z_target-Z_predicted)**2)/var_Z \
+            + ((P_target-P_predicted)**2)/var_P \
             + ((U_target-U_predicted)**2)/var_U \
-            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            + ((Z_target-Z_predicted)**2)/var_Z \
+            # + 1/10*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            # + 1/10*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            # + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
@@ -339,7 +336,7 @@ def train_func(config):
     # Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
     # very far from the typical 0-1 range we want for training a neural network
 
-    train_df,test_df = train_test_split(data_df,train_size=0.9)
+    train_df,test_df = train_test_split(data_df,train_size=0.7)
 
     train_arr = train_df.values
     val_arr = test_df.values
@@ -369,8 +366,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 6000)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 6000)
+    train_dataloader = DataLoader(train_dataset,batch_size = 20000)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 20000)
 
     # Instantiating the neural network
     model = BasicLightning(config)
@@ -392,7 +389,7 @@ def train_func(config):
                    RayTrainReportCallback(),
 
                    # Monitor the validation loss and if its not decreasing for more than 500 epochs, terminate the training.
-                   EarlyStopping(monitor="val_loss",mode="min",patience=500)
+                   EarlyStopping(monitor="val_loss",mode="min",patience=500000)
                    ],
         plugins=[RayLightningEnvironment()],
 
@@ -405,7 +402,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=True)
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":11})
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
@@ -425,8 +422,8 @@ trainer = TorchTrainer(
 
 def tune_asha(num_samples,max_number_of_training_epochs):
 
-    lower_limit_of_neurons_per_layer = 100
-    upper_limit_of_neurons_per_layer = 1000
+    lower_limit_of_neurons_per_layer = 45
+    upper_limit_of_neurons_per_layer = 47
 
     # Create distribution of integer values for the number of neurons per layer
     layer_size_dist = tune.randint(lower_limit_of_neurons_per_layer,upper_limit_of_neurons_per_layer)
@@ -434,12 +431,12 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-5, 1e-3),
-                    "weight_decay_coefficient":tune.uniform(1e-6,1e-2)
+                    "lr": tune.loguniform(1e-4, 1.1e-4),
+                    "weight_decay_coefficient":tune.uniform(1e-4,1.1e-4)
                     }
 
     # Use Asynchronus Successive Halving to schedule concurrent trails. Paper url = {https://proceedings.mlsys.org/paper_files/paper/2020/file/a06f20b349c6cf09a6b171c71b88bbfc-Paper.pdf}
-    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=1000, reduction_factor=2)
+    scheduler = ASHAScheduler(max_t= max_number_of_training_epochs, grace_period=1000000, reduction_factor=2)
 
     # Use Particle swarm optimisation for hyperparameter tuning from the Nevergrad package
     algo = NevergradSearch(optimizer=ng.optimizers.PSO,
