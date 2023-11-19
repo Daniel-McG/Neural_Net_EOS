@@ -17,7 +17,7 @@ Kb = 1 # Reduced Units?
 # Potential energy - extensive
 # Volume - Extensive
 # Enthalpy - extensive
-def isochoric_heat_capacity(N,PE,T):
+def isochoric_heat_capacity(N,E,T):
     """
     Calcualtes the isochoric heat capacity from the results of a NVT ensemble Molecular dynamics simulation
 
@@ -26,14 +26,11 @@ def isochoric_heat_capacity(N,PE,T):
     T: Temperature
 
     """
-    PE = PE*N
-    T_average = np.mean(T)
-    squared_1 = np.mean(PE**2)
-    squared_2 = np.mean(PE)**2
-    part1 = ((squared_1 - squared_2)/(Kb*T_average**2))
-    part2 = (3/2)*(N*Kb)
-    cv = part1 + part2
-    cv = cv/N
+    E_squared = E**2
+    mean_E = np.mean(E)
+    mean_E_squared = mean_E**2
+    E_squared_mean = np.mean(E_squared)
+    cv = (E_squared_mean-mean_E_squared)/(Kb*(T**2))
     return cv
 
 def isobaric_heat_capacity(E,N,P,V,T):
@@ -201,7 +198,7 @@ def script(path_to_results):
                 volume = data_arr[:,9]
 
 
-                cv = isochoric_heat_capacity(number_of_particles,potential_energy,temperature)
+                cv = isochoric_heat_capacity(number_of_particles,total_energy,temperature)
                 gamma_v = thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
                 derivative_properties.append(cv)
                 derivative_properties.append(gamma_v)
