@@ -171,11 +171,14 @@ class BasicLightning(pl.LightningModule):
         # Calculates the loss
 
         loss = A*torch.zeros_like(A) \
-            + ((P_target-P_predicted)**2)/var_P \
+            + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            # + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            # + 1/20*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            # + 1/20*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            # + 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            # + 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt   
         
         mean_train_loss = torch.mean(loss)
 
@@ -266,17 +269,21 @@ class BasicLightning(pl.LightningModule):
         # Calculates the loss
 
         loss = A*torch.zeros_like(A) \
-            + ((P_target-P_predicted)**2)/var_P \
+            + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            # + 1/10*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            # + 1/10*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+            # + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            # + 1/20*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            # + 1/20*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            # + 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            # + 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt   
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
         self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
         self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
-        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2))  
+        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2))
+        self.log("val_Z_loss",torch.mean((Z_predicted-Z_target)**2))  
         self.log("val_loss",mean_val_loss) 
         return {"val_loss": mean_val_loss}
     
@@ -358,8 +365,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 20000)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 20000)
+    train_dataloader = DataLoader(train_dataset,batch_size = 60000)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 60000)
 
     # Instantiating the neural network
     model = BasicLightning(config)
