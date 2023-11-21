@@ -103,8 +103,8 @@ class BasicLightning(pl.LightningModule):
         U_target = train_target_i[:,5]
         P_target = train_target_i[:,6]
         mu_jt_target = train_target_i[:,7]
-        # Z_target = train_target_i[:,8]
-        Z_target = (P_target/(rho*T))
+        Z_target = train_target_i[:,8]
+        # Z_target = (P_target/(rho*T))
         adiabatic_index_target = cp_target/cv_target
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
@@ -174,12 +174,12 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            # + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            # + 1/20*((cv_target-cv_predicted)**2)/var_cv \
-            # + 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            # + 1/20*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            # + 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            # + 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt   
+            + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + 1/20*((cv_target-cv_predicted)**2)/var_cv \
+            + 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + 1/20*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            + 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            + 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt   
         
         mean_train_loss = torch.mean(loss)
 
@@ -201,7 +201,7 @@ class BasicLightning(pl.LightningModule):
         P_target = val_target_i[:,6]
         mu_jt_target = val_target_i[:,7]
         Z_target = val_target_i[:,8]
-        Z_target = (P_target/(rho*T))
+        # Z_target = (P_target/(rho*T))
         adiabatic_index_target = cp_target/cv_target
         np.save
         var_cv = self.calculate_variance(cv_target)
@@ -272,12 +272,12 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            # + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-            # + 1/20*((cv_target-cv_predicted)**2)/var_cv \
-            # + 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            # + 1/20*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
-            # + 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
-            # + 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt   
+            + 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+            + 1/20*((cv_target-cv_predicted)**2)/var_cv \
+            + 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
+            + 1/20*((rho*betaT_target-rho*betaT_predicted)**2)/var_rho_betaT \
+            + 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index \
+            + 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt   
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
@@ -346,13 +346,13 @@ def train_func(config):
     temperature_column = 2
     pressure_column = 3
     internal_energy_column = 1
-    cv_column = 20
-    gammaV_column = cv_column + 1
-    cp_column = gammaV_column + 1
-    alphaP_column = cp_column + 1
-    betaT_column = alphaP_column + 1
+    cp_column = 20
+    alphaP_column = cp_column +1
+    betaT_column = alphaP_column +1
     mu_jt_column = betaT_column + 1
-    Z_column = mu_jt_column + 1
+    Z_column = mu_jt_column+1
+    cv_column = Z_column+1
+    gammaV_column = cv_column+1
     target_columns = [cv_column,gammaV_column,cp_column,alphaP_column,betaT_column,internal_energy_column,pressure_column,mu_jt_column,Z_column]
     train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
     train_targets = torch.tensor(train_arr[:,target_columns])
@@ -366,8 +366,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 256)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 256)
+    train_dataloader = DataLoader(train_dataset,batch_size = 6000)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 6000)
 
     # Instantiating the neural network
     model = BasicLightning(config)
@@ -431,7 +431,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-2, 1.1e-2),
+                    "lr": tune.loguniform(1e-6, 1.1e-6),
                     "weight_decay_coefficient":tune.uniform(1e-6,1.1e-6)
                     }
 
