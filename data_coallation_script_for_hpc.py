@@ -293,6 +293,6 @@ def script(path_to_results):
     with open('log.txt', 'w') as f:
         f.write("\n".join(strings_to_log))
         
-    np.savetxt("coallated_results_debug.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
+    np.savetxt("coallated_results.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
 
 script(path_to_results)
