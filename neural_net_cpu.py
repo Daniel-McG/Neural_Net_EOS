@@ -174,7 +174,7 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            + 1/20*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/20*((cv_target-cv_predicted)**2)/var_cv \
   
         
         mean_train_loss = torch.mean(loss)
@@ -269,7 +269,7 @@ class BasicLightning(pl.LightningModule):
         loss = A*torch.zeros_like(A) \
             + ((Z_target-Z_predicted)**2)/var_Z \
             + ((U_target-U_predicted)**2)/var_U \
-            + 1/20*((cv_target-cv_predicted)**2)/var_cv \
+            # + 1/20*((cv_target-cv_predicted)**2)/var_cv \
         
         mean_val_loss = torch.mean(loss)
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
@@ -359,7 +359,7 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 1)
+    train_dataloader = DataLoader(train_dataset,batch_size = 256)
     val_dataloader = DataLoader(val_Dataset,batch_size = 256)
 
     # Instantiating the neural network
