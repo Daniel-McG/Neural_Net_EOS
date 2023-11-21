@@ -80,7 +80,7 @@ class BasicLightning(pl.LightningModule):
         "optimizer": optimiser,
         "lr_scheduler": {"scheduler":scheduler}
         }
-        return output_dict
+        return optimiser
 
     
     def training_step(self,train_batch,batch_index):
@@ -103,7 +103,8 @@ class BasicLightning(pl.LightningModule):
         U_target = train_target_i[:,5]
         P_target = train_target_i[:,6]
         mu_jt_target = train_target_i[:,7]
-        Z_target = train_target_i[:,8]
+        # Z_target = train_target_i[:,8]
+        Z_target = (P_target/(rho*T))
         adiabatic_index_target = cp_target/cv_target
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
@@ -191,7 +192,6 @@ class BasicLightning(pl.LightningModule):
         val_input_i, val_target_i = val_batch
         rho = val_input_i[:,0]
         T = val_input_i[:,1]
-
         cv_target = val_target_i[:,0]
         gammaV_target = val_target_i[:,1]
         cp_target = val_target_i[:,2]
@@ -201,6 +201,7 @@ class BasicLightning(pl.LightningModule):
         P_target = val_target_i[:,6]
         mu_jt_target = val_target_i[:,7]
         Z_target = val_target_i[:,8]
+        Z_target = (P_target/(rho*T))
         adiabatic_index_target = cp_target/cv_target
         np.save
         var_cv = self.calculate_variance(cv_target)
@@ -325,7 +326,7 @@ class BasicLightning(pl.LightningModule):
 
 def train_func(config):
     # Read data from csv
-    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results.txt',delimiter=" ")
+    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/cleaned_coallated_results.txt',delimiter=" ")
     # Preprocessing the data
 
     # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -357,20 +358,20 @@ def train_func(config):
     train_targets = torch.tensor(train_arr[:,target_columns])
     val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
     val_targets = torch.tensor(val_arr[:,target_columns])
-    train_inputs = train_inputs.float()
-    train_targets = train_targets.float()
-    val_inputs = val_inputs.float()
-    val_targets = val_targets.float()
+    train_inputs = train_inputs.double()
+    train_targets = train_targets.double()
+    val_inputs = val_inputs.double()
+    val_targets = val_targets.double()
 
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 60000)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 60000)
+    train_dataloader = DataLoader(train_dataset,batch_size = 256)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 256)
 
     # Instantiating the neural network
     model = BasicLightning(config)
-
+    model = model.double()
     trainer = pl.Trainer(
         # Define the max number of epochs for the trainer, this is also enforced by the scheduler.
         max_epochs=max_number_of_training_epochs,
@@ -430,7 +431,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-5, 1.1e-5),
+                    "lr": tune.loguniform(1e-2, 1.1e-2),
                     "weight_decay_coefficient":tune.uniform(1e-6,1.1e-6)
                     }
 
