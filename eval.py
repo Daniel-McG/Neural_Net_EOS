@@ -29,7 +29,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 45
+        self.layer_size = 46
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -127,7 +127,7 @@ class BasicLightning(pl.LightningModule):
         dA_drho = torch.reshape(dA_drho,(-1,))
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
         # print(T,rho,A,dA_dT,dA_drho,d2A_drho2,d2A_dT2,d2A_drho2,d2A_dT_drho)
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
@@ -226,7 +226,7 @@ class BasicLightning(pl.LightningModule):
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
 
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        d2A_dT_drho = torch.reshape(d2A_drho2,(-1,))
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
@@ -332,7 +332,7 @@ class BasicLightning(pl.LightningModule):
         return dA_dT
     
     def calculate_U(self,input):
-        T, rho = self.un
+        T, rho = self.extract_T_and_rho(input)
         A = self.forward(input)
         A= torch.reshape(A,(-1,))
         S = self.calculate_S(input)
@@ -353,7 +353,10 @@ class BasicLightning(pl.LightningModule):
         gammaV = alphaP/betaT
         return gammaV
     
-    
+    def calculate_betaT(input):
+        dP_drho = t
+        betaT = torch.reciprocal(rho*dP_drho)
+        return betaT
     
     def calculate_alphaP(self,input):
         T, rho = self.extract_T_and_rho(input)
@@ -361,6 +364,13 @@ class BasicLightning(pl.LightningModule):
         dP_drho = self.calcualte_dP_drho(input)
         alphaP = (dP_dT)/(rho*dP_drho)
         return alphaP
+    
+    def calculate_P(self,input):
+        T,rho = self.extract_T_and_rho(input)
+        dA_drho = self.calculate_dA_drho(input)
+        dA_drho = torch.reshape(dA_drho,(-1,))
+        P = (rho**2)*dA_drho
+        return P
 
 
 
@@ -369,7 +379,8 @@ class BasicLightning(pl.LightningModule):
 
 
     
-model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-11-17_13-38-47/TorchTrainer_ff53aa03_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-11-17_13-38-47/lightning_logs/version_0/checkpoints/epoch=4600-step=4601.ckpt")
+model = BasicLightning().load_from_checkpoint("/home/daniel/Downloads/epoch=383-step=7680.ckpt")
+model = model.double()
 model.eval()
 data_df = pd.read_csv('coallated_results.txt',delimiter=" ")
 # Preprocessing the data
@@ -391,32 +402,131 @@ density_column = 4
 temperature_column = 2
 pressure_column = 3
 internal_energy_column = 1
-cv_column = 20
-gammaV_column = cv_column + 1
-cp_column = gammaV_column + 1
-alphaP_column = cp_column + 1
-betaT_column = alphaP_column + 1
+cp_column = 20
+alphaP_column = cp_column +1
+betaT_column = alphaP_column +1
 mu_jt_column = betaT_column + 1
-Z_column = mu_jt_column + 1
+Z_column = mu_jt_column+1
+cv_column = Z_column+1
+gammaV_column = cv_column+1
 target_columns = [pressure_column]
 train_inputs = torch.tensor(train_arr[:,[density_column,temperature_column]])
 train_targets = torch.tensor(train_arr[:,target_columns])
 val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
 val_targets = torch.tensor(val_arr[:,target_columns])
-train_inputs = train_inputs.float()
-train_targets = train_targets.float()
-val_inputs = val_inputs.float()
-val_targets = val_targets.float()
+train_inputs = train_inputs.double()
+train_targets = train_targets.double()
+val_inputs = val_inputs.double()
+val_targets = val_targets.double()
 input = torch.tensor([[0.5,2.0]])
 input.requires_grad = True
 train_inputs.requires_grad=True
-predicted_cv = model.calculate_cv(train_inputs).detach().numpy()
-predicted_z = model.calculate_Z(train_inputs).detach().numpy()
-target_Z = train_arr[:,Z_column]
-target_cv = train_arr[:,cv_column]
-sns.regplot(x = predicted_z.flatten(),y=target_Z.flatten())
+val_inputs.requires_grad = True
+predicted_cv = model.calculate_cv(val_inputs).detach().numpy()
+predicted_z = model.calculate_Z(val_inputs).detach().numpy()
+predicted_U = model.calculate_U(val_inputs).detach().numpy()
+predicted_P = model.calculate_P(val_inputs).detach().numpy()
+target_Z = val_arr[:,Z_column]
+target_cv = val_arr[:,cv_column]
+target_U = val_arr[:,internal_energy_column]
+target_P = val_arr[:,pressure_column]
+sns.set_style("whitegrid")
+sns.lineplot(x =[0,8],y=[0,8])
+sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten())
+plt.xlabel('Predicted_Z')
+plt.ylabel('Target_Z')
+plt.title('Z_parity')
 plt.show()
-sns.scatterplot(x = predicted_cv.flatten(),y = target_cv.flatten())
+sns.set_style("whitegrid")
+sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten())
+sns.lineplot(x =[0,14],y=[0,14])
+plt.xlabel('Predicted_U')
+plt.ylabel('Target_U')
+plt.title('U_parity')
 plt.show()
+sns.set_style("whitegrid")
+sns.scatterplot(x = predicted_z.flatten()*val_inputs[:,0].detach().numpy().flatten()*val_inputs[:,1].detach().numpy().flatten(),y = target_P.flatten())
+sns.lineplot(x =[0,60],y=[0,60])
+plt.xlabel('Predicted_P')
+plt.ylabel('Target_P')
+plt.title('P_parity')
+plt.show()
+sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten())
+sns.lineplot(x =[0,10],y=[0,10])
+plt.show()
+
+# sns.scatterplot(x = predicted_cv.flatten(),y = target_cv.flatten())
+# sns.lineplot(x =[0,60],y=[0,60])
+# plt.xlabel('Predicted_P')
+# plt.ylabel('Target_P')
+# plt.title('P_parity')
+# plt.show()
+
+# T_predcited,Rho_predicted = model.extract_T_and_rho(train_inputs)
+# print(T_predcited)
+# print(train_inputs)
+# import torch
+# for i in np.arange(0,10,0.5):
+#     # Create a numpy array with values from 0 to 1
+#     density = torch.linspace(0,1, 100)
+
+#     # Create a numpy array with a constant value
+#     temperature = torch.full((100,), i)
+
+#     # Concatenate the two numpy arrays horizontally
+#     tensor = torch.stack((density, temperature), dim=1)
+#     tensor.requires_grad=True
+#     print(tensor)
+#     P_isotherm = model.calculate_P(tensor)
+#     sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label=str(i))
+# plt.show()
+
+def find_closest(array, value, n=100):
+    array = np.asarray(array)
+    idx = np.argsort(np.abs(array - value))[:n]
+    return idx
+index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],0.746975,100)
+
+isotherm = train_arr[index_of_points_close_to_temp,:]
+
+P_isotherm_MD = isotherm[:,pressure_column]
+density_MD = isotherm[:,density_column]
+
+
+# Create a numpy array with values from 0 to 1
+density = torch.linspace(0,0.9, 1000)
+
+# Create a numpy array with a constant value
+temperature = torch.full((1000,), 0.746975)
+
+# Concatenate the two numpy arrays horizontally
+tensor = torch.stack((density, temperature), dim=1).double()
+tensor.requires_grad=True
+P_isotherm = model.calculate_P(tensor)
+sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label="ANN")
+sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),label = "MD" )
+plt.xlabel('Density')
+plt.ylabel('Reduced Pressure')
+plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# # Create 3 numpy column vectors
+# x = train_arr[:,density_column].flatten()
+# y = train_arr[:,temperature_column].flatten()
+# z = model.forward(train_inputs).detach().numpy().flatten()
+
+# # Create a meshgrid from the numpy arrays
+# X, Y = np.meshgrid(x, y)
+
+# # Create the plot using Matplotlib
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# ax.plot_surface(X, Y, z.reshape(-1,1), cmap='coolwarm')
+
+# # Show the plot
+# plt.show()
 
 
