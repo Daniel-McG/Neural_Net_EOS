@@ -4,9 +4,7 @@ import numpy as np
 import re
 import sys
 path_to_results = r"/home/daniel/Downloads/LJ-2d-md-results/"
-Na = 6.02*10**23
-#Kb = 1.380649*(10**-23)
-Kb = 1 # Reduced Units?
+Kb = 1 
 # Temperature - Intensive
 # Pressure - Intensive
 # Density - intensive
@@ -17,6 +15,13 @@ Kb = 1 # Reduced Units?
 # Potential energy - extensive
 # Volume - Extensive
 # Enthalpy - extensive
+def difference_in_mean_of_halves(arr):
+    length_of_array = len(arr)
+    mean_of_first_half = np.mean(arr[:length_of_array//2,:],axis=0)
+    mean_of_second_half = np.mean(arr[length_of_array//2:,:],axis=0)
+    absolute_difference_in_mean = np.abs(mean_of_first_half-mean_of_second_half)
+    return absolute_difference_in_mean
+
 def isochoric_heat_capacity(N,E,T):
     """
     Calcualtes the isochoric heat capacity from the results of a NVT ensemble Molecular dynamics simulation
@@ -50,7 +55,7 @@ def isobaric_heat_capacity(E,N,P,V,T):
     T_average = np.mean(T)
     P_average = np.mean(P)
     V_average = np.mean(V)
-    E_PV = E + (P_average*V_average)
+    E_PV = E + (P_average*V)
     squared_1 = np.mean(E_PV**2)
     squared_2 = np.mean(E_PV)**2
     cp = (1/(Kb*(T_average**2)))*(squared_1 - squared_2)
@@ -71,10 +76,9 @@ def thermal_expansion_coefficient(E,P,T,V,N):
     T_average = np.mean(T)
     P_average = np.mean(P)
     V_average = np.mean(V)
-    E_PV = E + (P_average*V_average)
+    E_PV = E + (P_average*V)
     E_PV_average = np.mean(E_PV)
     alpha_p = (1/(Kb*(T_average**2)*V_average))*(np.mean((V - V_average)*(E_PV-E_PV_average)))
-    alpha_p = alpha_p/N
     return alpha_p
 
 def isothermal_compressibility(V,T):
@@ -108,7 +112,7 @@ def thermal_pressure_coefficient(P,PE,rho,T,N):
     part1 = (np.mean((PE-PE_average)*(P-P_average)))/(Kb*(T_average**2))
     part2 = rho_average*Kb
     gamma_v = part1 + part2
-    gamma_v = gamma_v/N
+
     return gamma_v
 
 def compressibility_factor(P,rho,T):
@@ -152,44 +156,72 @@ def script(path_to_results):
     NPT_NVT_convergence_tolerance = 1e-3
     # Creating numpy arrays with the correct dimensions to append the results to
     array_size = (1,27)
-    i=1
     coallated_properties = np.zeros(array_size)
+    coallated_standard_deviations=np.zeros((1,20))
     for (root,dirs,files) in os.walk(path_to_results, topdown=True):
             # print(path_to_results)
             # print(root)
             # print(files)
-            derivative_properties = []
+            derivative_properties_dict = {}
             mean_NVT_results = np.zeros((1,1))
             mean_NPT_results = np.zeros((1,1))
             for filename in files:
                 if (filename == NVT_results_filename):
-                    # Separate the folder structure into individual items in a list
-                    split_root_folder_structure = str.split(root,sep="/")
-                    # print(split_root_folder_structure)
+                    convergence_criteria = {"timesteps":np.inf,
+                                            "total_energy":6.57944500e-04,
+                                            "temperature":8.09565500e-04,
+                                            "pressure":5.93767050e-03,
+                                            "density":0.00000000e+00,
+                                            "n_molecules":0.00000000e+00,
+                                            "kinetic_energy":8.09102000e-04,
+                                            "potential_energy":1.46698000e-03,
+                                            "enthalpy":1.08957393e-02,
+                                            "volume":0.00000000e+00}
+                    # # Separate the folder structure into individual items in a list
+                    # split_root_folder_structure = str.split(root,sep="/")
+                    # # print(split_root_folder_structure)
 
-                    # Index the folder structure where the foldername that contains the temperature and density 
-                    temp_and_density_foldername = split_root_folder_structure[5]
+                    # # Index the folder structure where the foldername that contains the temperature and density 
+                    # temp_and_density_foldername = split_root_folder_structure[5]
 
-                    # Use regex to find the temperature and density from the folder name
-                    temp_and_density = re.findall("\d+\.\d+", temp_and_density_foldername)
+                    # # Use regex to find the temperature and density from the folder name
+                    # temp_and_density = re.findall("\d+\.\d+", temp_and_density_foldername)
 
-                    # Unpack the temperature and density list into the temperature and density variables
-                    temperature, density = temp_and_density
+                    # # Unpack the temperature and density list into the temperature and density variables
+                    # temperature, density = temp_and_density
 
-                    # Convert temperature and density stings to floats
-                    temperature = float(temperature)
-                    density = float(density)
+                    # # Convert temperature and density stings to floats
+                    # temperature = float(temperature)
+                    # density = float(density)
 
                     # Join the results filename to the path to allow the data to be read
                     path_to_results = os.path.join(root,filename)
-
+                    
                     # Read the data and convert to numpy array
                     data_df = pd.read_csv(path_to_results,
                                         skiprows=[0,1],
                                         delimiter=" ",
                                         )
+                    
+
                     data_arr= data_df.to_numpy()
+                    difference_in_means = difference_in_mean_of_halves(data_arr)
+
+                    # If the simulatioon has not converged, dont take the results from this file 
+                    if (difference_in_means[1]>convergence_criteria["total_energy"] or
+                        difference_in_means[2]>convergence_criteria["temperature"] or
+                        difference_in_means[3]>convergence_criteria["pressure"] or 
+                        difference_in_means[4]>convergence_criteria["density"] or
+                        # Skip 5 since its a constant
+                        difference_in_means[6]>convergence_criteria["kinetic_energy"] or
+                        difference_in_means[7]>convergence_criteria["potential_energy"] or
+                        difference_in_means[8]>convergence_criteria["enthalpy"] or
+                        difference_in_means[9]>convergence_criteria["volume"]):
+                        
+                        continue
+
                     mean_NVT_results = data_arr.mean(axis=0)
+                    std_NVT_results = data_arr.std(axis = 0)
                     # Assign columns of data to the respective variable
                     total_energy = data_arr[:,1]
                     temperature = data_arr[:,2]
@@ -204,24 +236,34 @@ def script(path_to_results):
 
                     cv = isochoric_heat_capacity(number_of_particles,total_energy,temperature)
                     gamma_v = thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
-                    derivative_properties.append(cv)
-                    derivative_properties.append(gamma_v)
+                    derivative_properties_dict["cv"]=cv
+                    derivative_properties_dict["gamma_v"]=gamma_v
 
                 if filename== NPT_results_filename:
+                    convergence_criteria = {"timesteps":np.inf,
+                        "total_energy":6.57944500e-03,
+                        "temperature":8.09565500e-03,
+                        "pressure":5.93767050e-03,
+                        "density":1.00000000e-04,
+                        "n_molecules":0.00000000e+00,
+                        "kinetic_energy":8.09102000e-04,
+                        "potential_energy":1.46698000e-03,
+                        "enthalpy":1.08957393e-02,
+                        "volume":1.00000000e-2}
                     # Separate the folder structure into individual items in a list
-                    split_root_folder_structure = str.split(root,sep="/")
-                    # Index the folder structure where the foldername that contains the temperature and density 
-                    temp_and_density_foldername = split_root_folder_structure[5]
+                    # split_root_folder_structure = str.split(root,sep="/")
+                    # # Index the folder structure where the foldername that contains the temperature and density 
+                    # temp_and_density_foldername = split_root_folder_structure[5]
 
-                    # Use regex to find the temperature and density from the folder name
-                    temp_and_density = re.findall("\d+\.\d+", temp_and_density_foldername)
+                    # # Use regex to find the temperature and density from the folder name
+                    # temp_and_density = re.findall("\d+\.\d+", temp_and_density_foldername)
 
-                    # Unpack the temperature and density list into the temperature and density variables
-                    temperature, density = temp_and_density
+                    # # Unpack the temperature and density list into the temperature and density variables
+                    # temperature, density = temp_and_density
 
-                    # Convert temperature and density stings to floats
-                    initial_temperature = float(temperature)
-                    initial_density = float(density)
+                    # # Convert temperature and density stings to floats
+                    # initial_temperature = float(temperature)
+                    # initial_density = float(density)
 
                     # Join the results filename to the path to allow the data to be read
                     path_to_results = os.path.join(root,filename)
@@ -232,7 +274,23 @@ def script(path_to_results):
                                         delimiter=" ",
                                         )
                     data_arr= data_df.to_numpy()
+
+                    difference_in_means = difference_in_mean_of_halves(data_arr)
+
+                    # If the simulatioon has not converged, dont take the results from this file 
+                    # if (difference_in_means[1]>convergence_criteria["total_energy"] or
+                    #     difference_in_means[2]>convergence_criteria["temperature"] or
+                    #     difference_in_means[3]>convergence_criteria["pressure"] or 
+                    #     difference_in_means[4]>convergence_criteria["density"] or
+                    #     # Skip 5 since its a constant
+                    #     difference_in_means[6]>convergence_criteria["kinetic_energy"] or
+                    #     difference_in_means[7]>convergence_criteria["potential_energy"] or
+                    #     difference_in_means[8]>convergence_criteria["enthalpy"] or
+                    #     difference_in_means[9]>convergence_criteria["volume"]):
+                        
+                    #     continue
                     mean_NPT_results = data_arr.mean(axis=0)
+                    std_NPT_results = data_arr.std(axis = 0)
                     # Assign columns of data to the respective variable
                     total_energy = data_arr[:,1]
                     temperature = data_arr[:,2]
@@ -252,21 +310,31 @@ def script(path_to_results):
                     beta_t = isothermal_compressibility(volume,temperature)
                     mu_jt = joule_thompson(density,temperature,cp,alpha_p)
                     Z = compressibility_factor(pressure,density,temperature)
-                    derivative_properties.append(cp)
-                    derivative_properties.append(alpha_p)
-                    derivative_properties.append(beta_t)
-                    derivative_properties.append(mu_jt)
-                    derivative_properties.append(Z)
-            
+                    derivative_properties_dict["cp"]=cp
+                    derivative_properties_dict["alphaP"]=alpha_p
+                    derivative_properties_dict["beta_t"]=beta_t
+                    derivative_properties_dict["mu_jt"]=mu_jt
+                    derivative_properties_dict["Z"]=Z
+
             # if the derivatives properties array is empty or or doesnt have the correct nmber of proeprties, dont write the data out
             # if the derivative_properties list is less than 7, the NPT or NVT results for a run were not computed thus the run should be skipped
-                if (not derivative_properties) or (len(derivative_properties) < 7 ):
-                    continue
-                print(derivative_properties)
-                npt_nvt_derivative_results = np.concatenate((mean_NPT_results,mean_NVT_results,derivative_properties))
-                coallated_properties=np.append(coallated_properties,[npt_nvt_derivative_results],axis=0)
+            if (not derivative_properties_dict) or (len(derivative_properties_dict) < 7 ):
+                continue
+            derivative_properties =[derivative_properties_dict["cp"],
+                        derivative_properties_dict["alphaP"],
+                        derivative_properties_dict["beta_t"],
+                        derivative_properties_dict["mu_jt"],
+                        derivative_properties_dict["Z"],
+                        derivative_properties_dict["cv"],
+                        derivative_properties_dict["gamma_v"]]
+            # print(std_NVT_results)
+            print(mean_NVT_results)
+            npt_nvt_derivative_results = np.concatenate((mean_NPT_results,mean_NVT_results,derivative_properties))
+            coallated_properties=np.append(coallated_properties,[npt_nvt_derivative_results],axis=0)
+            standard_deviations = np.concatenate((std_NPT_results,std_NVT_results))
+            coallated_standard_deviations = np.append(coallated_standard_deviations,[standard_deviations],axis=0)
             
-            
+    
     density_nvt_column = 4
     density_npt_column = density_nvt_column+10
     temperature_nvt_column = 2
@@ -293,6 +361,7 @@ def script(path_to_results):
     with open('log.txt', 'w') as f:
         f.write("\n".join(strings_to_log))
         
-    np.savetxt("coallated_results.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
+    np.savetxt("coallated_results_debug.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
+    np.savetxt("coallated_standard_deviations.txt",coallated_standard_deviations)
 
 script(path_to_results)
