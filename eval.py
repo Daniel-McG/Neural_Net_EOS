@@ -29,7 +29,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 46
+        self.layer_size = 45
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -300,6 +300,7 @@ class BasicLightning(pl.LightningModule):
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         Cv = -T*d2A_dT2
         return Cv
+    
     def calculate_d2A_dT2(self,input):
         hessians = self.compute_hessian(input)
         d2A_dT2 = hessians[:, # In all of the hessians in the batch ...
@@ -307,6 +308,14 @@ class BasicLightning(pl.LightningModule):
                         1, # in the second row ...
                         1] # return the value in the second column
         return d2A_dT2
+    
+    def calculate_d2A_drho2(self,input):
+        hessians = self.compute_hessian(input)
+        d2A_drho2= hessians[:, # In all of the hessians in the batch ...
+                                 :, # In all of the heassians in the batch ...
+                                 0, # in the first row ...
+                                 0] # return the value in the first column
+        return d2A_drho2
     
     def extract_T_and_rho(self,input):
         rho = input[:,0]
@@ -331,6 +340,29 @@ class BasicLightning(pl.LightningModule):
         dA_dT = gradient[:,1]
         return dA_dT
     
+    def calculate_dP_dT(self,input):
+        T, rho = self.extract_T_and_rho(input)
+        d2A_dT_drho = self.calculate_d2A_dT_drho(input)
+        d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
+        return (rho**2)*d2A_dT_drho
+    
+    def calculate_dP_drho(self,input):
+        T, rho = self.extract_T_and_rho(input)
+        dA_drho = self.calculate_dA_drho(input)
+        dA_drho = torch.reshape(dA_drho,(-1,))
+        d2A_drho2 = self.calculate_d2A_drho2(input)
+        d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
+        return 2*rho*dA_drho + (rho**2)*d2A_drho2
+
+
+    def calculate_d2A_dT_drho(self,input):
+        hessians = self.compute_hessian(input)
+        d2A_dT_drho = hessians[:, # In all of the hessians in the batch ...
+                                :, # In all of the hessians in the batch ...
+                                1, # in the second row ...
+                                0] # return the value in the first column
+        return d2A_dT_drho
+
     def calculate_U(self,input):
         T, rho = self.extract_T_and_rho(input)
         A = self.forward(input)
@@ -353,18 +385,20 @@ class BasicLightning(pl.LightningModule):
         gammaV = alphaP/betaT
         return gammaV
     
-    def calculate_betaT(input):
-        dP_drho = t
+    def calculate_betaT(self,input):
+        T, rho = self.extract_T_and_rho(input)
+        dP_drho = self.calculate_dP_drho(input)
+        dP_drho = torch.reshape(dP_drho,(-1,))
         betaT = torch.reciprocal(rho*dP_drho)
         return betaT
     
     def calculate_alphaP(self,input):
         T, rho = self.extract_T_and_rho(input)
         dP_dT = self.calculate_dP_dT(input)
-        dP_drho = self.calcualte_dP_drho(input)
+        dP_drho = self.calculate_dP_drho(input)
         alphaP = (dP_dT)/(rho*dP_drho)
         return alphaP
-    
+
     def calculate_P(self,input):
         T,rho = self.extract_T_and_rho(input)
         dA_drho = self.calculate_dA_drho(input)
@@ -372,17 +406,34 @@ class BasicLightning(pl.LightningModule):
         P = (rho**2)*dA_drho
         return P
 
-
-
-
-
+    def calculate_cp(self,input):
+        T,rho = self.extract_T_and_rho(input)
+        cv = self.calculate_cv(input)
+        alphaP = self.calculate_alphaP(input)
+        betaT = self.calculate_betaT(input)
+        return (cv + (T/rho)*((alphaP**2)/betaT))
+    
+    def calculate_mu_jt(self,input):
+        T,rho = self.extract_T_and_rho(input)
+        cp = self.calculate_cp(input)
+        alphaP = self.calculate_alphaP(input)
+        return (1/(rho*cp))*((T*alphaP)-1)
+    
+    def calculate_mu(self,input):
+        T, rho = self.extract_T_and_rho(input)
+        A = self.forward(input)
+        A = torch.reshape(A,(-1,))
+        dA_drho = self.calculate_dA_drho(input)
+        dA_drho = torch.reshape(dA_drho,(-1,))
+        mu = A+rho*dA_drho
+        return mu
 
 
     
-model = BasicLightning().load_from_checkpoint("/home/daniel/Downloads/epoch=383-step=7680.ckpt")
+model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-11-25_04-20-42/TorchTrainer_6635a401_1_layer_size=45,lr=0.0010,weight_decay_coefficient=0.0000_2023-11-25_04-20-42/lightning_logs/version_0/checkpoints/epoch=2428-step=29148.ckpt")
 model = model.double()
 model.eval()
-data_df = pd.read_csv('coallated_results.txt',delimiter=" ")
+data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
 # Preprocessing the data
 
 # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -426,35 +477,76 @@ predicted_cv = model.calculate_cv(val_inputs).detach().numpy()
 predicted_z = model.calculate_Z(val_inputs).detach().numpy()
 predicted_U = model.calculate_U(val_inputs).detach().numpy()
 predicted_P = model.calculate_P(val_inputs).detach().numpy()
+predicted_alphaP = model.calculate_alphaP(val_inputs).detach().numpy()
+predicted_betaT = model.calculate_betaT(val_inputs).detach().numpy()
+predicted_mujt = model.calculate_mu_jt(val_inputs).detach().numpy()
 target_Z = val_arr[:,Z_column]
 target_cv = val_arr[:,cv_column]
 target_U = val_arr[:,internal_energy_column]
 target_P = val_arr[:,pressure_column]
-sns.set_style("whitegrid")
+target_alphaP = val_arr[:,alphaP_column]
+target_betaT = val_arr[:,betaT_column]
+target_mujt = val_arr[:,mu_jt_column]
+
+sns.set_style("ticks")
 sns.lineplot(x =[0,8],y=[0,8])
 sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten())
 plt.xlabel('Predicted_Z')
 plt.ylabel('Target_Z')
 plt.title('Z_parity')
 plt.show()
-sns.set_style("whitegrid")
+
+sns.set_style("ticks")
 sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten())
 sns.lineplot(x =[0,14],y=[0,14])
 plt.xlabel('Predicted_U')
 plt.ylabel('Target_U')
 plt.title('U_parity')
 plt.show()
-sns.set_style("whitegrid")
-sns.scatterplot(x = predicted_z.flatten()*val_inputs[:,0].detach().numpy().flatten()*val_inputs[:,1].detach().numpy().flatten(),y = target_P.flatten())
-sns.lineplot(x =[0,60],y=[0,60])
+
+sns.set_style("ticks")
+sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten())
+sns.lineplot(x =[0,20],y=[0,20])
 plt.xlabel('Predicted_P')
 plt.ylabel('Target_P')
 plt.title('P_parity')
 plt.show()
+
+sns.set_style("ticks")
 sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten())
+plt.xlabel('Predicted_cv')
+plt.ylabel('Target_cv')
+plt.title('cv_parity')
 sns.lineplot(x =[0,10],y=[0,10])
 plt.show()
 
+sns.set_style("ticks")
+sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten())
+sns.lineplot(x=[0,20],y=[0,20])
+plt.xlabel('Predicted_Rho*betaT')
+plt.ylabel('Target_Rho*betaT')
+plt.title('Rho*betaT_parity')
+plt.xlim(0,20)
+plt.ylim(0,20)
+plt.show()
+
+sns.set_style("ticks")
+sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten())
+plt.xlabel('Predicted_alphaP')
+plt.ylabel('Target_alphaP')
+plt.title('alpahP_parity')
+sns.lineplot(x =[0,10],y=[0,10])
+plt.show()
+
+sns.set_style("ticks")
+sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
+plt.xlabel('Predicted_mujt')
+plt.ylabel('Target_mujt')
+plt.title('mujt_parity')
+sns.lineplot(x =[-100,0],y=[-100,0])
+plt.xlim(-100,0)
+plt.ylim(-100,0)
+plt.show()
 # sns.scatterplot(x = predicted_cv.flatten(),y = target_cv.flatten())
 # sns.lineplot(x =[0,60],y=[0,60])
 # plt.xlabel('Predicted_P')
@@ -481,6 +573,10 @@ plt.show()
 #     sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label=str(i))
 # plt.show()
 
+
+##########
+# Isotherm
+##########
 def find_closest(array, value, n=100):
     array = np.asarray(array)
     idx = np.argsort(np.abs(array - value))[:n]
@@ -509,24 +605,59 @@ plt.xlabel('Density')
 plt.ylabel('Reduced Pressure')
 plt.show()
 
-import numpy as np
+###################
+# Helmholtz surface
+####################
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
-# # Create 3 numpy column vectors
-# x = train_arr[:,density_column].flatten()
-# y = train_arr[:,temperature_column].flatten()
-# z = model.forward(train_inputs).detach().numpy().flatten()
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
 
-# # Create a meshgrid from the numpy arrays
-# X, Y = np.meshgrid(x, y)
+# Generate random data
+x = val_arr[:,density_column].flatten()
+y = val_arr[:,temperature_column].flatten()
+z = model.forward(val_inputs).detach().numpy().flatten()
 
-# # Create the plot using Matplotlib
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-# ax.plot_surface(X, Y, z.reshape(-1,1), cmap='coolwarm')
+# Create a 3D scatter plot
+ax.scatter(x, y, z, c=z)
 
-# # Show the plot
+# Set labels and title
+ax.set_xlabel('Density')
+ax.set_ylabel('Temperature')
+ax.set_zlabel('Helmholtz Free Energy')
+plt.title('Helmholtz Free Energy Surface')
+
 # plt.show()
 
 
+################
+# Phase Envelope
+################
+# num_points = 1000000
+# density = torch.linspace(0,1,num_points)
+# temperature = torch.full((num_points,), 0.45)
+
+# input_tensor = torch.stack((density, temperature), dim=1).double()
+# input_tensor.requires_grad=True
+# print(input_tensor)
+# chemical_potential = model.calculate_mu(input_tensor)
+# pressure = model.calculate_P(input_tensor)
+
+
+
+# diff_chemcial_potential = torch.abs(chemical_potential[:len(chemical_potential)//2] - torch.flip(chemical_potential[len(chemical_potential)//2:],dims=(0,)))
+
+# for value in diff_chemcial_potential[diff_chemcial_potential<1e-2].flatten():
+#     mask = diff_chemcial_potential == value
+#     index_diff_zero = mask.nonzero().flatten()
+
+#     if (torch.abs(pressure[index_diff_zero]-pressure[-index_diff_zero-1])<1e-5):
+#         if pressure[index_diff_zero]>0:
+#             print("success")
+#             print((pressure[index_diff_zero],pressure[-index_diff_zero-1]))
+#             print((chemical_potential[index_diff_zero],chemical_potential[-index_diff_zero-1]))
+#             print(density[index_diff_zero],density[-index_diff_zero-1])
+
+# plt.show()
