@@ -157,15 +157,15 @@ def script(path_to_results):
             for filename in files:
                 if (filename == NVT_results_filename):
                     convergence_criteria = {"timesteps":np.inf,
-                                            "total_energy":6.57944500e-04,
-                                            "temperature":8.09565500e-04,
-                                            "pressure":5.93767050e-03,
-                                            "density":0.00000000e+00,
-                                            "n_molecules":0.00000000e+00,
-                                            "kinetic_energy":8.09102000e-04,
-                                            "potential_energy":1.46698000e-03,
-                                            "enthalpy":1.08957393e-02,
-                                            "volume":0.00000000e+00}
+                                            "total_energy":1e-03,
+                                            "temperature":1e-03,
+                                            "pressure":1e-03,
+                                            "density":1e-03,
+                                            "n_molecules":1e-03,
+                                            "kinetic_energy":1e-03,
+                                            "potential_energy":1e-03,
+                                            "enthalpy":1e-02,
+                                            "volume":1e-2}
                     # # Separate the folder structure into individual items in a list
                     # split_root_folder_structure = str.split(root,sep="/")
                     # # print(split_root_folder_structure)
@@ -230,15 +230,15 @@ def script(path_to_results):
 
                 if filename== NPT_results_filename:
                     convergence_criteria = {"timesteps":np.inf,
-                        "total_energy":6.57944500e-03,
-                        "temperature":8.09565500e-03,
-                        "pressure":5.93767050e-03,
-                        "density":1.00000000e-04,
-                        "n_molecules":0.00000000e+00,
-                        "kinetic_energy":8.09102000e-04,
-                        "potential_energy":1.46698000e-03,
-                        "enthalpy":1.08957393e-02,
-                        "volume":1.00000000e-2}
+                        "total_energy":1e-03,
+                        "temperature":1e-03,
+                        "pressure":1e-03,
+                        "density":1e-03,
+                        "n_molecules":1e-03,
+                        "kinetic_energy":1e-03,
+                        "potential_energy":1e-03,
+                        "enthalpy":1e-02,
+                        "volume":1e-2}
                     # Separate the folder structure into individual items in a list
                     # split_root_folder_structure = str.split(root,sep="/")
                     # # Index the folder structure where the foldername that contains the temperature and density 
@@ -267,17 +267,17 @@ def script(path_to_results):
                     difference_in_means = difference_in_mean_of_halves(data_arr)
 
                     # If the simulatioon has not converged, dont take the results from this file 
-                    # if (difference_in_means[1]>convergence_criteria["total_energy"] or
-                    #     difference_in_means[2]>convergence_criteria["temperature"] or
-                    #     difference_in_means[3]>convergence_criteria["pressure"] or 
-                    #     difference_in_means[4]>convergence_criteria["density"] or
-                    #     # Skip 5 since its a constant
-                    #     difference_in_means[6]>convergence_criteria["kinetic_energy"] or
-                    #     difference_in_means[7]>convergence_criteria["potential_energy"] or
-                    #     difference_in_means[8]>convergence_criteria["enthalpy"] or
-                    #     difference_in_means[9]>convergence_criteria["volume"]):
+                    if (difference_in_means[1]>convergence_criteria["total_energy"] or
+                        difference_in_means[2]>convergence_criteria["temperature"] or
+                        difference_in_means[3]>convergence_criteria["pressure"] or 
+                        difference_in_means[4]>convergence_criteria["density"] or
+                        # Skip 5 since its a constant
+                        difference_in_means[6]>convergence_criteria["kinetic_energy"] or
+                        difference_in_means[7]>convergence_criteria["potential_energy"] or
+                        difference_in_means[8]>convergence_criteria["enthalpy"] or
+                        difference_in_means[9]>convergence_criteria["volume"]):
                         
-                    #     continue
+                        continue
                     mean_NPT_results = data_arr.mean(axis=0)
                     std_NPT_results = data_arr.std(axis = 0)
                     # Assign columns of data to the respective variable
