@@ -31,17 +31,14 @@ def isochoric_heat_capacity(N,E,T):
     T: Temperature
 
     """
-    E = E*N
+    N_mean = np.mean(N)
+    dE = (E-np.mean(E))*N_mean
     T = np.mean(T)
-    E_squared = E**2
-    mean_E = np.mean(E)
-    mean_E_squared = mean_E**2
-    E_squared_mean = np.mean(E_squared)
-    cv = (E_squared_mean-mean_E_squared)/(Kb*(T**2))
-    cv = cv/N
+    cv = np.mean(dE**2)/(Kb*(T**2))
+    cv /= N_mean
     return cv
 
-def isobaric_heat_capacity(E,N,P,V,T):
+def isobaric_heat_capacity(H,N,T):
     '''
     Calculates the isobarc heat capacity from the results of a NPT ensemble molecuar dynamics simulation
 
@@ -51,18 +48,14 @@ def isobaric_heat_capacity(E,N,P,V,T):
     V: Instantaneous volume
     T: Instantaneous Temperature
     '''
-    E = E*N
-    T_average = np.mean(T)
-    P_average = np.mean(P)
-    V_average = np.mean(V)
-    E_PV = E + (P_average*V)
-    squared_1 = np.mean(E_PV**2)
-    squared_2 = np.mean(E_PV)**2
-    cp = (1/(Kb*(T_average**2)))*(squared_1 - squared_2)
-    cp = cp/N
+    N_mean = np.mean(N)
+    T_mean = np.mean(T)
+    dH = (H-np.mean(H))*N_mean
+    cp = np.mean(dH**2) / T_mean**2
+    cp /= N_mean
     return cp
 
-def thermal_expansion_coefficient(E,P,T,V,N):
+def thermal_expansion_coefficient(H,T,V,N):
     '''
     Calculates the thermal expansion coefficient from the results of a NPT ensemble molecular dynamics simulation
 
@@ -72,13 +65,12 @@ def thermal_expansion_coefficient(E,P,T,V,N):
     V: Instantaneous volume
     T: Instantaneous Temperatur
     '''
-    E = E*N
+    N_mean = np.mean(N)
+    dH = (H-np.mean(H))*N_mean
+    dV = (V-np.mean(V))
     T_average = np.mean(T)
-    P_average = np.mean(P)
     V_average = np.mean(V)
-    E_PV = E + (P_average*V)
-    E_PV_average = np.mean(E_PV)
-    alpha_p = (1/(Kb*(T_average**2)*V_average))*(np.mean((V - V_average)*(E_PV-E_PV_average)))
+    alpha_p = np.mean(dH*dV) / (V_average*T_average**2)
     return alpha_p
 
 def isothermal_compressibility(V,T):
@@ -88,11 +80,11 @@ def isothermal_compressibility(V,T):
     V: Instantaneous volume
     T: Instantaneous temperature
     """
-    T_average = np.mean(T)
     V_average = np.mean(V)
-    squared_1 = np.mean(V**2)
-    squared_2 = V_average**2
-    return (1/(V_average*Kb*T_average))*(squared_1-squared_2)
+    T_average = np.mean(T)
+    dV = V-np.mean(V)
+    betaT = np.mean(dV**2) / (V_average*T_average)
+    return betaT
 
 def thermal_pressure_coefficient(P,PE,rho,T,N):
     """
@@ -104,15 +96,12 @@ def thermal_pressure_coefficient(P,PE,rho,T,N):
     T: Instantaneous temperature
     N: Number of molecules
     """
-    PE = PE*N
-    rho_average = np.mean(rho)
+    N_mean = np.mean(N)
     T_average = np.mean(T)
-    PE_average = np.mean(PE)
-    P_average = np.mean(P)
-    part1 = (np.mean((PE-PE_average)*(P-P_average)))/(Kb*(T_average**2))
-    part2 = rho_average*Kb
-    gamma_v = part1 + part2
-
+    rho_average = np.mean(rho)
+    dPE = (PE-np.mean(PE))*N_mean
+    dP = P-np.mean(P)
+    gamma_v = np.mean(dPE*dP) / T_average**2 + rho_average
     return gamma_v
 
 def compressibility_factor(P,rho,T):
@@ -305,8 +294,8 @@ def script(path_to_results):
                     
                     # inital_property_check(initial_temperature,temperature,initial_density,density,0.01) #Deprecated, script now removes runs with invalid densities from the array
 
-                    cp = isobaric_heat_capacity(total_energy,number_of_particles,pressure,volume,temperature)
-                    alpha_p = thermal_expansion_coefficient(total_energy,pressure,temperature,volume,number_of_particles)
+                    cp = isobaric_heat_capacity(enthalpy,number_of_particles,temperature)
+                    alpha_p = thermal_expansion_coefficient(enthalpy,temperature,volume,number_of_particles)
                     beta_t = isothermal_compressibility(volume,temperature)
                     mu_jt = joule_thompson(density,temperature,cp,alpha_p)
                     Z = compressibility_factor(pressure,density,temperature)
