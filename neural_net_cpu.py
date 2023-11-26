@@ -105,8 +105,10 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = train_target_i[:,7]
         Z_target = train_target_i[:,8]
 
-
+        # cp_target = cv_target + (T/rho)*((alphaP_target**2)/betaT_target)
+        # mu_jt_target = (1/(rho*cp_target))*((T*alphaP_target)-1)
         adiabatic_index_target = cp_target/cv_target
+
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
@@ -165,6 +167,7 @@ class BasicLightning(pl.LightningModule):
         alphaP_predicted = (dP_dT)/(rho*dP_drho)
         rho_betaT_predicted = 1/dP_drho
         betaT_predicted = torch.reciprocal(rho*dP_drho)
+
         gammaV_predicted = alphaP_predicted/betaT_predicted
         cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
@@ -172,11 +175,16 @@ class BasicLightning(pl.LightningModule):
         adiabatic_index_predicted = cp_predicted/cv_predicted
         # Calculates the loss
 
-        A_loss = A*torch.zeros_like(A)
+        cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
-        alphaP_loss = 1/10*((alphaP_target-alphaP_predicted))/var_alphaP
-        loss = Z_loss+U_loss+A_loss
+        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
+        adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
+        gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
+        cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
+        
+
+        loss = Z_loss+U_loss+cv_loss+gammaV_predicted+A*torch.zeros_like(A)
 
 
         mean_train_loss = torch.mean(loss)
@@ -208,8 +216,11 @@ class BasicLightning(pl.LightningModule):
         P_target = val_target_i[:,6]
         mu_jt_target = val_target_i[:,7]
         Z_target = val_target_i[:,8]
-        gammaV_target = alphaP_target/betaT_target
-        # Z_target = (P_target/(rho*T))
+
+
+        # gammaV_target = alphaP_target/betaT_target
+        # cp_target = cv_target + (T/rho)*((alphaP_target**2)/betaT_target)
+        # mu_jt_target = (1/(rho*cp_target))*((T*alphaP_target)-1)
         adiabatic_index_target = cp_target/cv_target
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
@@ -276,10 +287,17 @@ class BasicLightning(pl.LightningModule):
         adiabatic_index_predicted = cp_predicted/cv_predicted
         # Calculates the loss
 
+        cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
+
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
-        alphaP_loss = 1/10*((alphaP_target-alphaP_predicted))/var_alphaP
-        loss = Z_loss+U_loss+A*torch.zeros_like(A)
+        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
+        adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
+        gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
+        cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
+        
+
+        loss = Z_loss+U_loss+cv_loss+A*torch.zeros_like(A)
 
 
         
@@ -326,7 +344,7 @@ class BasicLightning(pl.LightningModule):
 
 def train_func(config):
     # Read data from csv
-    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results_debug.txt',delimiter=" ")
+    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/cleaned_coallated_results.txt',delimiter=" ")
     # Preprocessing the data
 
     # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -336,11 +354,12 @@ def train_func(config):
     # Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
     # very far from the typical 0-1 range we want for training a neural network
 
-    train_df,test_df = train_test_split(data_df,train_size=0.5)
+    train_df,test_df = train_test_split(data_df,train_size=0.8)
 
     train_arr = train_df.values
     val_arr = test_df.values
-    
+    np.savetxt("training_data_for_current_ANN.txt",train_arr)
+    np.savetxt("validation_data_for_current_ANN.txt",val_arr)
     # Splitting the preprocessed data into the inputs and targets
     density_column = 4
     temperature_column = 2
