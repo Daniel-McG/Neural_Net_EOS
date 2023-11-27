@@ -429,11 +429,15 @@ class BasicLightning(pl.LightningModule):
         return mu
 
 
-    
-model = BasicLightning().load_from_checkpoint("/home/daniel/ray_results/TorchTrainer_2023-11-25_04-20-42/TorchTrainer_6635a401_1_layer_size=45,lr=0.0010,weight_decay_coefficient=0.0000_2023-11-25_04-20-42/lightning_logs/version_0/checkpoints/epoch=2428-step=29148.ckpt")
+path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-27_16-49-57/TorchTrainer_0c309819_1_layer_size=45,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-27_16-49-57/lightning_logs/version_0/checkpoints/epoch=1129-step=13560.ckpt"    
+split_path = str.split(path_to_checkpoint,"/")
+path_to_trainer = str.join("/",split_path[0:6])
+path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
+path_to_validation_data = str.join("/",[path_to_trainer,"validation_data_for_current_ANN.txt"])
+model = BasicLightning().load_from_checkpoint(path_to_checkpoint)
 model = model.double()
 model.eval()
-data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
+# data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
 # Preprocessing the data
 
 # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -443,10 +447,8 @@ data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
 # Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
 # very far from the typical 0-1 range we want for training a neural network
 
-train_df,test_df = train_test_split(data_df,train_size=0.7)
-
-train_arr = train_df.values
-val_arr = test_df.values
+train_arr = np.loadtxt(path_to_training_data)
+val_arr = np.loadtxt(path_to_validation_data)
 
 # Splitting the preprocessed data into the inputs and targets
 density_column = 4
@@ -480,6 +482,7 @@ predicted_P = model.calculate_P(val_inputs).detach().numpy()
 predicted_alphaP = model.calculate_alphaP(val_inputs).detach().numpy()
 predicted_betaT = model.calculate_betaT(val_inputs).detach().numpy()
 predicted_mujt = model.calculate_mu_jt(val_inputs).detach().numpy()
+predicted_gammaV = model.calculate_gammaV(val_inputs).detach().numpy()
 target_Z = val_arr[:,Z_column]
 target_cv = val_arr[:,cv_column]
 target_U = val_arr[:,internal_energy_column]
@@ -487,48 +490,49 @@ target_P = val_arr[:,pressure_column]
 target_alphaP = val_arr[:,alphaP_column]
 target_betaT = val_arr[:,betaT_column]
 target_mujt = val_arr[:,mu_jt_column]
+target_gammaV = val_arr[:,gammaV_column]
 
-sns.set_style("ticks")
-sns.lineplot(x =[0,8],y=[0,8])
-sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten())
-plt.xlabel('Predicted_Z')
-plt.ylabel('Target_Z')
-plt.title('Z_parity')
-plt.show()
+# sns.set_style("ticks")
+# sns.lineplot(x =[0,8],y=[0,8])
+# sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten())
+# plt.xlabel('Predicted_Z')
+# plt.ylabel('Target_Z')
+# plt.title('Z_parity')
+# plt.show()
 
-sns.set_style("ticks")
-sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten())
-sns.lineplot(x =[0,14],y=[0,14])
-plt.xlabel('Predicted_U')
-plt.ylabel('Target_U')
-plt.title('U_parity')
-plt.show()
+# sns.set_style("ticks")
+# sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten())
+# sns.lineplot(x =[0,14],y=[0,14])
+# plt.xlabel('Predicted_U')
+# plt.ylabel('Target_U')
+# plt.title('U_parity')
+# plt.show()
 
-sns.set_style("ticks")
-sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten())
-sns.lineplot(x =[0,20],y=[0,20])
-plt.xlabel('Predicted_P')
-plt.ylabel('Target_P')
-plt.title('P_parity')
-plt.show()
+# sns.set_style("ticks")
+# sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten())
+# sns.lineplot(x =[0,20],y=[0,20])
+# plt.xlabel('Predicted_P')
+# plt.ylabel('Target_P')
+# plt.title('P_parity')
+# plt.show()
 
-sns.set_style("ticks")
-sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten())
-plt.xlabel('Predicted_cv')
-plt.ylabel('Target_cv')
-plt.title('cv_parity')
-sns.lineplot(x =[0,10],y=[0,10])
-plt.show()
+# sns.set_style("ticks")
+# sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten())
+# plt.xlabel('Predicted_cv')
+# plt.ylabel('Target_cv')
+# plt.title('cv_parity')
+# sns.lineplot(x =[0,10],y=[0,10])
+# plt.show()
 
-sns.set_style("ticks")
-sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten())
-sns.lineplot(x=[0,20],y=[0,20])
-plt.xlabel('Predicted_Rho*betaT')
-plt.ylabel('Target_Rho*betaT')
-plt.title('Rho*betaT_parity')
-plt.xlim(0,20)
-plt.ylim(0,20)
-plt.show()
+# sns.set_style("ticks")
+# sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten())
+# sns.lineplot(x=[0,20],y=[0,20])
+# plt.xlabel('Predicted_Rho*betaT')
+# plt.ylabel('Target_Rho*betaT')
+# plt.title('Rho*betaT_parity')
+# plt.xlim(0,20)
+# plt.ylim(0,20)
+# plt.show()
 
 sns.set_style("ticks")
 sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten())
@@ -538,15 +542,84 @@ plt.title('alpahP_parity')
 sns.lineplot(x =[0,10],y=[0,10])
 plt.show()
 
+# sns.set_style("ticks")
+# sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
+# plt.xlabel('Predicted_mujt')
+# plt.ylabel('Target_mujt')
+# plt.title('mujt_parity')
+# sns.lineplot(x =[-100,0],y=[-100,0])
+# plt.xlim(-100,0)
+# plt.ylim(-100,0)
+# plt.show()
+
+
 sns.set_style("ticks")
-sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
-plt.xlabel('Predicted_mujt')
-plt.ylabel('Target_mujt')
-plt.title('mujt_parity')
-sns.lineplot(x =[-100,0],y=[-100,0])
-plt.xlim(-100,0)
-plt.ylim(-100,0)
+fig, axs = plt.subplots(2, 4, figsize=(15, 10),constrained_layout=True)
+
+sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
+sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
+axs[0, 0].set_xlabel('Predicted_Z')
+axs[0, 0].set_ylabel('Target_Z')
+axs[0, 0].set_title('Z_parity')
+
+sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1])
+sns.lineplot(x =[0,14],y=[0,14], ax = axs[0, 1])
+axs[0, 1].set_xlabel('Predicted_U')
+axs[0, 1].set_ylabel('Target_U')
+axs[0, 1].set_title('U_parity')
+
+sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2])
+sns.lineplot(x =[0,20],y=[0,20], ax = axs[0, 2])
+axs[0, 2].set_xlabel('Predicted_P')
+axs[0, 2].set_ylabel('Target_P')
+axs[0, 2].set_title('P_parity')
+
+sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
+axs[0, 3].set_xlabel('Predicted_cv')
+axs[0, 3].set_ylabel('Target_cv')
+axs[0, 3].set_title('cv_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 3])
+
+sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten(), ax = axs[1, 0])
+sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
+axs[1, 0].set_xlabel('Predicted_Rho*betaT')
+axs[1, 0].set_ylabel('Target_Rho*betaT')
+axs[1, 0].set_title('Rho*betaT_parity')
+# axs[1, 0].set_xlim(0,20)
+# axs[1, 0].set_ylim(0,20)
+
+sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
+axs[1, 2].set_xlabel('Predicted_alphaP')
+axs[1, 2].set_ylabel('Target_alphaP')
+axs[1, 2].set_title('alphaP_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 2])
+
+sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1])
+axs[1, 1].set_xlabel('Predicted_gammaV')
+axs[1, 1].set_ylabel('Target_gammaV')
+axs[1, 1].set_title('gammaV_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 1])
+
+sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3])
+axs[1, 3].set_xlabel('predicted_mujt')
+axs[1, 3].set_ylabel('target_mujt')
+axs[1, 3].set_title('mujt_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
+
 plt.show()
+
+# sns.set_style("ticks")
+# sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
+# plt.xlabel('Predicted_mujt')
+# plt.ylabel('Target_mujt')
+# plt.title('mujt_parity')
+# sns.lineplot(x =[-100,0],y=[-100,0])
+# plt.xlim(-100,0)
+# plt.ylim(-100,0)
+# plt.show()
+
+
+
 # sns.scatterplot(x = predicted_cv.flatten(),y = target_cv.flatten())
 # sns.lineplot(x =[0,60],y=[0,60])
 # plt.xlabel('Predicted_P')
