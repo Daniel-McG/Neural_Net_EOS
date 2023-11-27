@@ -221,7 +221,7 @@ def script(path_to_results):
                     volume = data_arr[:,9]
                     
                     # Redefining enlthalpy
-                    enthalpy = total_energy.flatten()+np.mean(pressure.flatten())*volume.flatten()
+                    enthalpy = total_energy.flatten()+np.mean(pressure.flatten())*density.flatten()
 
 
                     cv_list = []
@@ -315,7 +315,7 @@ def script(path_to_results):
                     # enthalpy = data_arr[:,8]
                     volume = data_arr[:,9]
                     # Redefining enlthalpy
-                    enthalpy = total_energy.flatten()+np.mean(pressure.flatten())*volume.flatten()
+                    enthalpy = total_energy.flatten()+np.mean(pressure.flatten())*density.flatten()
                     
                     # inital_property_check(initial_temperature,temperature,initial_density,density,0.01) #Deprecated, script now removes runs with invalid densities from the array
                     cp_list = []
