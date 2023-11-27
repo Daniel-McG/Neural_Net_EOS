@@ -176,6 +176,7 @@ class BasicLightning(pl.LightningModule):
         # Calculates the loss
 
         cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
+
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
         alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
@@ -184,7 +185,7 @@ class BasicLightning(pl.LightningModule):
         cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
         
 
-        loss = Z_loss+U_loss+cv_loss+gammaV_predicted+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+cv_loss+alphaP_loss+A*torch.zeros_like(A)
 
 
         mean_train_loss = torch.mean(loss)
@@ -344,9 +345,9 @@ class BasicLightning(pl.LightningModule):
 
 def train_func(config):
     # Read data from csv
-    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/cleaned_coallated_results.txt',delimiter=" ")
+    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results_debug.txt',delimiter=" ")
     # Preprocessing the data
-
+    data_df = data_df.dropna()
     # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
     # It may be possible to write the min max sacaling in PyTorch so that the DAG is retained all the way to the input data but im not sure if
     # the TensorDataset and DataLoader would destroy the DAG.
@@ -385,8 +386,8 @@ def train_func(config):
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
     val_Dataset = TensorDataset(val_inputs,val_targets)
-    train_dataloader = DataLoader(train_dataset,batch_size = 256)
-    val_dataloader = DataLoader(val_Dataset,batch_size = 256)
+    train_dataloader = DataLoader(train_dataset,batch_size = 32)
+    val_dataloader = DataLoader(val_Dataset,batch_size = 32)
 
     # Instantiating the neural network
     model = BasicLightning(config)
@@ -450,7 +451,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-3, 1.1e-3),
+                    "lr": tune.loguniform(1e-4, 1.1e-4),
                     "weight_decay_coefficient":tune.uniform(1e-6,1.1e-6)
                     }
 
