@@ -217,8 +217,12 @@ def script(path_to_results):
                     number_of_particles = 2048 #data_arr[:,5]
                     kinetic_energy = data_arr[:,6]
                     potential_energy = data_arr[:,7]
-                    enthalpy = data_arr[:,8]
+                    # enthalpy = data_arr[:,8]
                     volume = data_arr[:,9]
+                    
+                    # Redefining enlthalpy
+                    enthalpy = total_energy.flatten()+np.mean(pressure.flatten())*volume.flatten()
+
 
                     cv_list = []
                     gamma_v_list = []
@@ -308,9 +312,10 @@ def script(path_to_results):
                     number_of_particles = 2048 #data_arr[:,5]
                     kinetic_energy = data_arr[:,6]
                     potential_energy = data_arr[:,7]
-                    enthalpy = data_arr[:,8]
+                    # enthalpy = data_arr[:,8]
                     volume = data_arr[:,9]
-
+                    # Redefining enlthalpy
+                    enthalpy = total_energy.flatten()+np.mean(pressure.flatten())*volume.flatten()
                     
                     # inital_property_check(initial_temperature,temperature,initial_density,density,0.01) #Deprecated, script now removes runs with invalid densities from the array
                     cp_list = []
