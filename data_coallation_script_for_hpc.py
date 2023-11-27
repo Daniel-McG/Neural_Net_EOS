@@ -18,8 +18,10 @@ Kb = 1
 def difference_in_mean_of_halves(arr):
     length_of_array = len(arr)
     mean_of_first_half = np.mean(arr[:length_of_array//2,:],axis=0)
+    std_of_first_half = np.std(arr[:length_of_array//2,:],axis=0)
     mean_of_second_half = np.mean(arr[length_of_array//2:,:],axis=0)
-    absolute_difference_in_mean = np.abs(mean_of_first_half-mean_of_second_half)
+    std_of_second_half = np.mean(arr[length_of_array//2:,:],axis=0)
+    absolute_difference_in_mean = np.abs((mean_of_first_half/std_of_first_half)-(mean_of_second_half/std_of_second_half))
     return absolute_difference_in_mean
 
 def isochoric_heat_capacity(N,E,T):
@@ -27,7 +29,7 @@ def isochoric_heat_capacity(N,E,T):
     Calcualtes the isochoric heat capacity from the results of a NVT ensemble Molecular dynamics simulation
 
     N: Number of particles
-    PE: Instantaneous potential energy
+    E: Instantaneous total energy
     T: Temperature
 
     """
@@ -59,11 +61,9 @@ def thermal_expansion_coefficient(H,T,V,N):
     '''
     Calculates the thermal expansion coefficient from the results of a NPT ensemble molecular dynamics simulation
 
-    E: Instantaneous total energy
+    H: Instantaneous enthalpy
     N: Number of particles
-    P: Instantaneous pressure
     V: Instantaneous volume
-    T: Instantaneous Temperatur
     '''
     N_mean = np.mean(N)
     dH = (H-np.mean(H))*N_mean
@@ -157,15 +157,15 @@ def script(path_to_results):
             for filename in files:
                 if (filename == NVT_results_filename):
                     convergence_criteria = {"timesteps":np.inf,
-                                            "total_energy":1e-03,
-                                            "temperature":1e-03,
-                                            "pressure":1e-03,
-                                            "density":1e-03,
-                                            "n_molecules":1e-03,
-                                            "kinetic_energy":1e-03,
-                                            "potential_energy":1e-03,
-                                            "enthalpy":1e-02,
-                                            "volume":1e-2}
+                                            "total_energy":5e-02,
+                                            "temperature":5e-02,
+                                            "pressure":5e-02,
+                                            "density":5e-02,
+                                            "n_molecules":5e-02,
+                                            "kinetic_energy":5e-02,
+                                            "potential_energy":5e-02,
+                                            "enthalpy":5e-02,
+                                            "volume":5e-2}
                     # # Separate the folder structure into individual items in a list
                     # split_root_folder_structure = str.split(root,sep="/")
                     # # print(split_root_folder_structure)
@@ -230,15 +230,15 @@ def script(path_to_results):
 
                 if filename== NPT_results_filename:
                     convergence_criteria = {"timesteps":np.inf,
-                        "total_energy":1e-03,
-                        "temperature":1e-03,
-                        "pressure":1e-03,
-                        "density":1e-03,
-                        "n_molecules":1e-03,
-                        "kinetic_energy":1e-03,
-                        "potential_energy":1e-03,
-                        "enthalpy":1e-02,
-                        "volume":1e-2}
+                        "total_energy":5e-02,
+                        "temperature":5e-02,
+                        "pressure":5e-02,
+                        "density":5e-02,
+                        "n_molecules":5e-02,
+                        "kinetic_energy":5e-02,
+                        "potential_energy":5e-02,
+                        "enthalpy":5e-02,
+                        "volume":5e-2}
                     # Separate the folder structure into individual items in a list
                     # split_root_folder_structure = str.split(root,sep="/")
                     # # Index the folder structure where the foldername that contains the temperature and density 
@@ -317,7 +317,6 @@ def script(path_to_results):
                         derivative_properties_dict["cv"],
                         derivative_properties_dict["gamma_v"]]
             # print(std_NVT_results)
-            print(mean_NVT_results)
             npt_nvt_derivative_results = np.concatenate((mean_NPT_results,mean_NVT_results,derivative_properties))
             coallated_properties=np.append(coallated_properties,[npt_nvt_derivative_results],axis=0)
             standard_deviations = np.concatenate((std_NPT_results,std_NVT_results))
@@ -350,7 +349,7 @@ def script(path_to_results):
     with open('log.txt', 'w') as f:
         f.write("\n".join(strings_to_log))
         
-    np.savetxt("coallated_results_debug.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
+    np.savetxt("local_coallated_results_debug.txt",coallated_properties_with_removed_invalid_densities_and_temperatures)
     np.savetxt("coallated_standard_deviations.txt",coallated_standard_deviations)
 
 script(path_to_results)
