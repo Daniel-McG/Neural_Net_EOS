@@ -20,8 +20,8 @@ def difference_in_mean_of_halves(arr):
     mean_of_first_half = np.mean(arr[:length_of_array//2,:],axis=0)
     std_of_first_half = np.std(arr[:length_of_array//2,:],axis=0)
     mean_of_second_half = np.mean(arr[length_of_array//2:,:],axis=0)
-    std_of_second_half = np.mean(arr[length_of_array//2:,:],axis=0)
-    absolute_difference_in_mean = np.abs((mean_of_first_half/std_of_first_half)-(mean_of_second_half/std_of_second_half))
+    std_of_second_half = np.std(arr[length_of_array//2:,:],axis=0)
+    absolute_difference_in_mean = np.abs((std_of_first_half/mean_of_first_half)-(std_of_second_half/mean_of_second_half))
     return absolute_difference_in_mean
 
 def isochoric_heat_capacity(N,E,T):
@@ -200,12 +200,10 @@ def script(path_to_results):
                     if (difference_in_means[1]>convergence_criteria["total_energy"] or
                         difference_in_means[2]>convergence_criteria["temperature"] or
                         difference_in_means[3]>convergence_criteria["pressure"] or 
-                        difference_in_means[4]>convergence_criteria["density"] or
                         # Skip 5 since its a constant
                         difference_in_means[6]>convergence_criteria["kinetic_energy"] or
                         difference_in_means[7]>convergence_criteria["potential_energy"] or
-                        difference_in_means[8]>convergence_criteria["enthalpy"] or
-                        difference_in_means[9]>convergence_criteria["volume"]):
+                        difference_in_means[8]>convergence_criteria["enthalpy"]):
                         
                         continue
 
@@ -222,9 +220,31 @@ def script(path_to_results):
                     enthalpy = data_arr[:,8]
                     volume = data_arr[:,9]
 
+                    cv_list = []
+                    gamma_v_list = []
+                    for timesteps in range(4*len(temperature)//6,len(temperature),100):
+                        cv = isochoric_heat_capacity(number_of_particles,total_energy[:timesteps],temperature[:timesteps])
+                        gamma_v = thermal_pressure_coefficient(pressure[:timesteps],potential_energy[:timesteps],density[:timesteps],temperature[:timesteps],number_of_particles)
+                        cv_list.append(cv)
+                        gamma_v_list.append(gamma_v)
 
-                    cv = isochoric_heat_capacity(number_of_particles,total_energy,temperature)
-                    gamma_v = thermal_pressure_coefficient(pressure,potential_energy,density,temperature,number_of_particles)
+                    
+                    mean_cv = np.mean(cv_list)
+                    std_cv = np.std(cv_list)
+
+                    mean_gamma_v = np.mean(gamma_v_list)
+                    std_gamma_v = np.std(gamma_v_list)
+
+                    if np.abs(std_cv/mean_cv) > 0.05:
+                        cv = np.nan
+                    else:
+                        cv = cv_list[-1]
+                    
+                    if np.abs(std_gamma_v/mean_gamma_v) > 0.05:
+                        gamma_v = np.nan
+                    else:
+                        gamma_v = gamma_v_list[-1]
+
                     derivative_properties_dict["cv"]=cv
                     derivative_properties_dict["gamma_v"]=gamma_v
 
@@ -293,12 +313,65 @@ def script(path_to_results):
 
                     
                     # inital_property_check(initial_temperature,temperature,initial_density,density,0.01) #Deprecated, script now removes runs with invalid densities from the array
+                    cp_list = []
+                    alpha_p_list = []
+                    beta_t_list = []
+                    mu_jt_list = []
+                    Z_list = []
+                    for timesteps in range(4*len(temperature)//6,len(temperature),100):
+                        cp = isobaric_heat_capacity(enthalpy[:timesteps],number_of_particles,temperature[:timesteps])
+                        alpha_p = thermal_expansion_coefficient(enthalpy[:timesteps],temperature[:timesteps],volume[:timesteps],number_of_particles)
+                        beta_t = isothermal_compressibility(volume[:timesteps],temperature[:timesteps])
+                        mu_jt = joule_thompson(density[:timesteps],temperature[:timesteps],cp,alpha_p)
+                        Z = compressibility_factor(pressure[:timesteps],density[:timesteps],temperature[:timesteps])
 
-                    cp = isobaric_heat_capacity(enthalpy,number_of_particles,temperature)
-                    alpha_p = thermal_expansion_coefficient(enthalpy,temperature,volume,number_of_particles)
-                    beta_t = isothermal_compressibility(volume,temperature)
-                    mu_jt = joule_thompson(density,temperature,cp,alpha_p)
-                    Z = compressibility_factor(pressure,density,temperature)
+                        cp_list.append(cp)
+                        alpha_p_list.append(alpha_p)
+                        beta_t_list.append(beta_t)
+                        mu_jt_list.append(mu_jt)
+                        Z_list.append(Z)
+
+                    mean_cp = np.mean(cp_list)
+                    std_cp = np.std(cp_list)
+
+                    mean_alpha_p = np.mean(alpha_p_list)
+                    std_alpha_p = np.std(alpha_p_list)
+
+                    mean_beta_t = np.mean(beta_t_list)
+                    std_beta_t = np.std(beta_t_list)
+
+                    mean_mu_jt = np.mean(mu_jt_list)
+                    std_mu_jt = np.std(mu_jt_list)
+
+                    mean_Z = np.mean(Z_list)
+                    std_Z = np.std(Z_list)
+
+                    tolerance = 0.05
+                    if np.abs(std_cp/mean_cp)>tolerance:
+                        cp = np.nan
+                    else:
+                        cp = cp_list[-1]
+                    
+                    if np.abs(std_alpha_p/mean_alpha_p)>tolerance:
+                        alpha_p = np.nan
+                    else:
+                        alpha_p = alpha_p_list[-1]
+
+                    if np.abs(std_beta_t/mean_beta_t)>tolerance:
+                        beta_t = np.nan
+                    else:
+                        beta_t = beta_t_list[-1]
+                    
+                    if np.abs(std_mu_jt/mean_mu_jt) >tolerance:
+                        mu_jt = np.nan
+                    else:
+                        mu_jt = mu_jt_list[-1]
+                    
+                    if np.abs(std_Z/mean_Z) > tolerance:
+                        Z = np.nan
+                    else:
+                        Z = Z_list[-1]
+
                     derivative_properties_dict["cp"]=cp
                     derivative_properties_dict["alphaP"]=alpha_p
                     derivative_properties_dict["beta_t"]=beta_t
