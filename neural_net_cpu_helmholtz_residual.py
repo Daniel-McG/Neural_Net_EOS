@@ -163,20 +163,42 @@ class BasicLightning(pl.LightningModule):
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
+
         U_predicted = A+(T*S)
-        Z = (rho*dA_drho)/T
+        U_predicted += (2/2)*T  # Adding ideal gas contribution
+
+        P_by_rho = rho*dA_drho
+        P_by_rho += T # Adding ideal gas contribution
+
+        Z_predicted= (P_by_rho)/T
+
         cv_predicted = -T*d2A_dT2
+        cv_predicted += (2/2) # Adding ideal gas contribution
+
         dP_dT = (rho**2)*d2A_dT_drho
+        dP_dT += rho    # Adding ideal gas contribution
+
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        dP_drho += T    # Adding ideal gas contribution
+
         alphaP_predicted = (dP_dT)/(rho*dP_drho)
-        rho_betaT_predicted = 1/dP_drho
-        betaT_predicted = torch.reciprocal(rho*dP_drho)
+
+
+        rho_betaT = torch.reciprocal(dP_drho)
+        betaT_predicted = torch.divide(rho_betaT,rho)
 
         gammaV_predicted = alphaP_predicted/betaT_predicted
-        cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
+
+        cp_aux1 = T*(alphaP_predicted**2)
+        cp_aux2 = rho*betaT_predicted
+        cp_predicted = cv_predicted+(cp_aux1/cp_aux2)
+        
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
-        Z_predicted = P_predicted/(rho*T)
+        
+        # Z_predicted = P_predicted/(rho*T)
+
         adiabatic_index_predicted = cp_predicted/cv_predicted
+
         # Calculates the loss
 
         cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
@@ -191,7 +213,8 @@ class BasicLightning(pl.LightningModule):
         mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
 
-        loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
+        # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+A*torch.zeros_like(A)
 
 
         mean_train_loss = torch.mean(loss)
@@ -284,18 +307,40 @@ class BasicLightning(pl.LightningModule):
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
+
         U_predicted = A+(T*S)
-        Z = (rho*dA_drho)/T
+        U_predicted += (2/2)*T  # Adding ideal gas contribution
+
+        P_by_rho = rho*dA_drho
+        P_by_rho += T # Adding ideal gas contribution
+
+        Z_predicted= (P_by_rho)/T
+
         cv_predicted = -T*d2A_dT2
+        cv_predicted += (2/2) # Adding ideal gas contribution
+
         dP_dT = (rho**2)*d2A_dT_drho
+        dP_dT += rho    # Adding ideal gas contribution
+
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        dP_drho += T    # Adding ideal gas contribution
+
         alphaP_predicted = (dP_dT)/(rho*dP_drho)
-        rho_betaT = 1/dP_drho
-        betaT_predicted = torch.reciprocal(rho*dP_drho)
+
+
+        rho_betaT = torch.reciprocal(dP_drho)
+        betaT_predicted = torch.divide(rho_betaT,rho)
+
         gammaV_predicted = alphaP_predicted/betaT_predicted
-        cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
+
+        cp_aux1 = T*(alphaP_predicted**2)
+        cp_aux2 = rho*betaT_predicted
+        cp_predicted = cv_predicted+(cp_aux1/cp_aux2)
+        
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
-        Z_predicted = P_predicted/(rho*T)
+        
+        # Z_predicted = P_predicted/(rho*T)
+
         adiabatic_index_predicted = cp_predicted/cv_predicted
         # Calculates the loss
 
@@ -311,7 +356,8 @@ class BasicLightning(pl.LightningModule):
         mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
 
-        loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
+        # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+A*torch.zeros_like(A)
 
 
         
@@ -339,7 +385,7 @@ class BasicLightning(pl.LightningModule):
         # Compute the gradient of the output of the forward pass wrt the input, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
         gradient = torch.autograd.grad(self.forward(inputs)-self.forward(input_at_zero_densities),
                                        inputs,
-                                       grad_outputs=torch.ones_like(self.forward(inputs)),
+                                       grad_outputs=torch.ones_like(self.forward(inputs)-self.forward(input_at_zero_densities)),
                                        retain_graph=True,
                                        create_graph=True
                                        )[0]
@@ -469,7 +515,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
     # Create search space dict
     search_space = {
                     "layer_size":layer_size_dist,
-                    "lr": tune.loguniform(1e-6, 1.1e-6),
+                    "lr": tune.loguniform(1e-4, 1.1e-4),
                     "weight_decay_coefficient":tune.uniform(1e-6,1.1e-6)
                     }
 

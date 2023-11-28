@@ -299,6 +299,7 @@ class BasicLightning(pl.LightningModule):
         d2A_dT2 = self.calculate_d2A_dT2(input)
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         Cv = -T*d2A_dT2
+        Cv += 1
         return Cv
     
     def calculate_d2A_dT2(self,input):
@@ -326,8 +327,9 @@ class BasicLightning(pl.LightningModule):
         T,rho = self.extract_T_and_rho(input)
         dA_drho = self.calculate_dA_drho(input)
         dA_drho = torch.reshape(dA_drho,(-1,))
-        P = (rho**2)*dA_drho
-        Z = P/(rho*T)
+        P_by_rho = rho*dA_drho
+        P_by_rho += T # Adding ideal gas contribution
+        Z= (P_by_rho)/T
         return Z
     
     def calculate_dA_drho(self,input):
@@ -344,7 +346,9 @@ class BasicLightning(pl.LightningModule):
         T, rho = self.extract_T_and_rho(input)
         d2A_dT_drho = self.calculate_d2A_dT_drho(input)
         d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
-        return (rho**2)*d2A_dT_drho
+        dP_dT = (rho**2)*d2A_dT_drho
+        dP_dT += rho    # Adding ideal gas contribution
+        return dP_dT
     
     def calculate_dP_drho(self,input):
         T, rho = self.extract_T_and_rho(input)
@@ -352,7 +356,9 @@ class BasicLightning(pl.LightningModule):
         dA_drho = torch.reshape(dA_drho,(-1,))
         d2A_drho2 = self.calculate_d2A_drho2(input)
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
-        return 2*rho*dA_drho + (rho**2)*d2A_drho2
+        dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        dP_drho += T    # Adding ideal gas contribution
+        return dP_drho
 
 
     def calculate_d2A_dT_drho(self,input):
@@ -365,10 +371,15 @@ class BasicLightning(pl.LightningModule):
 
     def calculate_U(self,input):
         T, rho = self.extract_T_and_rho(input)
-        A = self.forward(input)
+        zero_densities = torch.zeros_like(rho)
+        input_at_zero_densities = torch.stack((zero_densities,T),dim=-1)
+
+        #A is the residual helmholtz free energy
+        A = self.forward(input)-self.forward(input_at_zero_densities)
         A= torch.reshape(A,(-1,))
         S = self.calculate_S(input)
         U=A+(T*S)
+        U += T
         return U
 
     
@@ -389,7 +400,8 @@ class BasicLightning(pl.LightningModule):
         T, rho = self.extract_T_and_rho(input)
         dP_drho = self.calculate_dP_drho(input)
         dP_drho = torch.reshape(dP_drho,(-1,))
-        betaT = torch.reciprocal(rho*dP_drho)
+        rho_betaT = torch.reciprocal(dP_drho)
+        betaT = torch.divide(rho_betaT,rho)
         return betaT
     
     def calculate_alphaP(self,input):
@@ -403,7 +415,9 @@ class BasicLightning(pl.LightningModule):
         T,rho = self.extract_T_and_rho(input)
         dA_drho = self.calculate_dA_drho(input)
         dA_drho = torch.reshape(dA_drho,(-1,))
-        P = (rho**2)*dA_drho
+        P_by_rho = rho*dA_drho
+        P_by_rho += T # Adding ideal gas contribution
+        P = P_by_rho*rho
         return P
 
     def calculate_cp(self,input):
@@ -429,7 +443,7 @@ class BasicLightning(pl.LightningModule):
         return mu
 
 
-path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-27_16-49-57/TorchTrainer_0c309819_1_layer_size=45,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-27_16-49-57/lightning_logs/version_0/checkpoints/epoch=1129-step=13560.ckpt"    
+path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-28_11-08-06/TorchTrainer_252d5c60_1_layer_size=45,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-28_11-08-06/lightning_logs/version_0/checkpoints/epoch=5448-step=81735.ckpt"    
 split_path = str.split(path_to_checkpoint,"/")
 path_to_trainer = str.join("/",split_path[0:6])
 path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
