@@ -29,7 +29,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 45
+        self.layer_size = 46
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -441,9 +441,14 @@ class BasicLightning(pl.LightningModule):
         dA_drho = torch.reshape(dA_drho,(-1,))
         mu = A+rho*dA_drho
         return mu
+    def calculate_adiabatic_index(self,input):
+        cp = self.calculate_cp(input)
+        cv = self.calculate_cv(input)
+        adiabatic_index = cp/cv
+        return adiabatic_index
 
 
-path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-28_11-08-06/TorchTrainer_252d5c60_1_layer_size=45,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-28_11-08-06/lightning_logs/version_0/checkpoints/epoch=5448-step=81735.ckpt"    
+path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-28_12-12-46/TorchTrainer_58231b20_1_layer_size=46,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-28_12-12-46/lightning_logs/version_0/checkpoints/epoch=693-step=10410.ckpt"    
 split_path = str.split(path_to_checkpoint,"/")
 path_to_trainer = str.join("/",split_path[0:6])
 path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
@@ -497,6 +502,8 @@ predicted_alphaP = model.calculate_alphaP(val_inputs).detach().numpy()
 predicted_betaT = model.calculate_betaT(val_inputs).detach().numpy()
 predicted_mujt = model.calculate_mu_jt(val_inputs).detach().numpy()
 predicted_gammaV = model.calculate_gammaV(val_inputs).detach().numpy()
+predicted_cp = model.calculate_cp(val_inputs).detach().numpy()
+predicted_adiabatic_index = model.calculate_adiabatic_index(val_inputs).detach().numpy()
 target_Z = val_arr[:,Z_column]
 target_cv = val_arr[:,cv_column]
 target_U = val_arr[:,internal_energy_column]
@@ -505,6 +512,8 @@ target_alphaP = val_arr[:,alphaP_column]
 target_betaT = val_arr[:,betaT_column]
 target_mujt = val_arr[:,mu_jt_column]
 target_gammaV = val_arr[:,gammaV_column]
+target_cp = val_arr[:,cp_column]
+target_adiabatic_index = val_arr[:,cp_column]/val_arr[:,cv_column]
 
 # sns.set_style("ticks")
 # sns.lineplot(x =[0,8],y=[0,8])
@@ -568,7 +577,7 @@ plt.show()
 
 
 sns.set_style("ticks")
-fig, axs = plt.subplots(2, 4, figsize=(15, 10),constrained_layout=True)
+fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
 
 sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
 sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
@@ -592,7 +601,7 @@ sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
 axs[0, 3].set_xlabel('Predicted_cv')
 axs[0, 3].set_ylabel('Target_cv')
 axs[0, 3].set_title('cv_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 3])
+sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
 
 sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten(), ax = axs[1, 0])
 sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
@@ -601,6 +610,11 @@ axs[1, 0].set_ylabel('Target_Rho*betaT')
 axs[1, 0].set_title('Rho*betaT_parity')
 # axs[1, 0].set_xlim(0,20)
 # axs[1, 0].set_ylim(0,20)
+sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
+axs[0, 4].set_xlabel('predicted_Cp')
+axs[0, 4].set_ylabel('target_Cp')
+axs[0, 4].set_title('Cp_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 4])
 
 sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
 axs[1, 2].set_xlabel('Predicted_alphaP')
@@ -619,6 +633,12 @@ axs[1, 3].set_xlabel('predicted_mujt')
 axs[1, 3].set_ylabel('target_mujt')
 axs[1, 3].set_title('mujt_parity')
 sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
+
+sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4])
+axs[1, 4].set_xlabel('predicted_Cp/Cv')
+axs[1, 4].set_ylabel('target_Cp/Cv')
+axs[1, 4].set_title('Cp/Cv_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
 
 plt.show()
 
