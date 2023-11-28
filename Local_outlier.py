@@ -63,7 +63,6 @@ np.savetxt("coallated_results_debug.txt",data_arr)
 #     print(np.sum(y_pred== -1))
 #     # plt.show()
 #     data_arr=cleaned_arr
-np.savetxt("coallated_results_debug.txt",data_arr)
 # sns.scatterplot(x = y_pred,y = train_arr[:,pressure_column])
 # plt.show()
 
