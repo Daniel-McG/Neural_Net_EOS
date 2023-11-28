@@ -44,15 +44,25 @@ isotherm = data_arr[index_of_points_close_to_temp,:]
 
 
 
-for i in range(0,20):
+for i in range(20,27,):
     Outlier_model = LocalOutlierFactor(n_neighbors=20)
-    y_pred = Outlier_model.fit_predict(data_arr[:,i].reshape(-1, 1) )
+    y_pred = Outlier_model.fit_predict(data_arr[:,i][~np.isnan(data_arr[:,i])].reshape(-1, 1) )
     
-    cleaned_arr = np.delete(data_arr,y_pred == -1,0)
+    data_arr[:,i][~np.isnan(data_arr[:,i])] = np.where(y_pred == -1,np.nan,data_arr[:,i][~np.isnan(data_arr[:,i])])
     # sns.kdeplot(cleaned_arr[:,i])
     print(np.sum(y_pred== -1))
     # plt.show()
-    data_arr=cleaned_arr
+# print(len(data_arr))
+np.savetxt("coallated_results_debug.txt",data_arr)
+# for i in range(22,27):
+#     Outlier_model = LocalOutlierFactor(n_neighbors=20)
+#     y_pred = Outlier_model.fit_predict(data_arr[:,i].reshape(-1, 1) )
+    
+#     cleaned_arr = np.delete(data_arr,y_pred == -1,0)
+#     # sns.kdeplot(cleaned_arr[:,i])
+#     print(np.sum(y_pred== -1))
+#     # plt.show()
+#     data_arr=cleaned_arr
 np.savetxt("coallated_results_debug.txt",data_arr)
 # sns.scatterplot(x = y_pred,y = train_arr[:,pressure_column])
 # plt.show()
