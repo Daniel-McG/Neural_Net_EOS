@@ -105,14 +105,15 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = train_target_i[:,7]
         Z_target = train_target_i[:,8]
 
-        rho_betaT_target = rho*betaT_target
+        # cp_target = cv_target + (T/rho)*((alphaP_target**2)/betaT_target)
+        # mu_jt_target = (1/(rho*cp_target))*((T*alphaP_target)-1)
         adiabatic_index_target = cp_target/cv_target
 
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
         var_gammaV = self.calculate_variance(gammaV_target)
-        var_rho_betaT = self.calculate_variance(rho*rho_betaT_target)
+        var_rho_betaT = self.calculate_variance(rho*betaT_target)
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
@@ -184,12 +185,12 @@ class BasicLightning(pl.LightningModule):
 
 
         rho_betaT = torch.reciprocal(dP_drho)
-        rho_betaT_predicted = torch.divide(rho_betaT,rho)
+        betaT_predicted = torch.divide(rho_betaT,rho)
 
-        gammaV_predicted = alphaP_predicted/rho_betaT_predicted
+        gammaV_predicted = alphaP_predicted/betaT_predicted
 
         cp_aux1 = T*(alphaP_predicted**2)
-        cp_aux2 = rho*rho_betaT_predicted
+        cp_aux2 = rho*betaT_predicted
         cp_predicted = cv_predicted+(cp_aux1/cp_aux2)
         
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
@@ -209,7 +210,7 @@ class BasicLightning(pl.LightningModule):
         non_nan_adiabatic_index_index = ~torch.isnan(adiabatic_index_target)
         non_nan_gammaV_index = ~torch.isnan(gammaV_target)
         non_nan_cv_index = ~torch.isnan(cv_target)        
-        non_nan_betaT_index = ~torch.isnan(rho*rho_betaT_target)
+        non_nan_betaT_index = ~torch.isnan(rho*betaT_target)
         non_nan_mu_jt_index = ~torch.isnan(mu_jt_target )
 
         # If a property was deemed non converged in the collation script it was set to Nan, this indexes all of the properties where they arent Nan's.
@@ -233,8 +234,8 @@ class BasicLightning(pl.LightningModule):
         cv_target = cv_target[non_nan_cv_index]
         cv_predicted = cv_predicted[non_nan_cv_index]
 
-        rho_betaT_target = rho_betaT_target[non_nan_betaT_index]
-        rho_betaT_predicted = rho_betaT_predicted[non_nan_betaT_index]
+        betaT_target = betaT_target[non_nan_betaT_index]
+        betaT_predicted = betaT_predicted[non_nan_betaT_index]
 
         mu_jt_target = mu_jt_target[non_nan_mu_jt_index]
         mu_jt_predicted = mu_jt_predicted[non_nan_mu_jt_index]
@@ -246,10 +247,13 @@ class BasicLightning(pl.LightningModule):
         alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
         alphaP_loss = torch.mean(alphaP_loss)
         
+        Z_loss = ((Z_target-Z_predicted)**2)/var_Z
+        U_loss = ((U_target-U_predicted)**2)/var_U
+        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
         adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
         gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
         cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
-        rho_betaT_loss = 1/20*((rho_betaT_target-rho_betaT_predicted)**2)/var_rho_betaT
+        rho_betaT_loss = 1/20*((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2)/var_rho_betaT
         mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
         # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
@@ -279,7 +283,7 @@ class BasicLightning(pl.LightningModule):
         self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
         self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
         self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
-        self.log("val_rhoBetaT_loss",torch.mean((rho_betaT_target-rho_betaT_predicted)**2))
+        self.log("val_rhoBetaT_loss",torch.mean((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2))
         self.log("val_alphaP_loss",torch.mean((alphaP_target-alphaP_predicted)**2))
         self.log("val_mu_jt_loss",torch.mean((mu_jt_predicted-mu_jt_target)**2))
         self.log("val_cp_predicted",torch.mean((cp_predicted-cp_target)**2))
@@ -386,12 +390,12 @@ class BasicLightning(pl.LightningModule):
 
 
         rho_betaT = torch.reciprocal(dP_drho)
-        rho_betaT_predicted = torch.divide(rho_betaT,rho)
+        betaT_predicted = torch.divide(rho_betaT,rho)
 
-        gammaV_predicted = alphaP_predicted/rho_betaT_predicted
+        gammaV_predicted = alphaP_predicted/betaT_predicted
 
         cp_aux1 = T*(alphaP_predicted**2)
-        cp_aux2 = rho*rho_betaT_predicted
+        cp_aux2 = rho*betaT_predicted
         cp_predicted = cv_predicted+(cp_aux1/cp_aux2)
         
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
@@ -411,7 +415,7 @@ class BasicLightning(pl.LightningModule):
         non_nan_adiabatic_index_index = ~torch.isnan(adiabatic_index_target)
         non_nan_gammaV_index = ~torch.isnan(gammaV_target)
         non_nan_cv_index = ~torch.isnan(cv_target)        
-        non_nan_betaT_index = ~torch.isnan(rho*rho_betaT_target)
+        non_nan_betaT_index = ~torch.isnan(rho*betaT_target)
         non_nan_mu_jt_index = ~torch.isnan(mu_jt_target )
 
         # If a property was deemed non converged in the collation script it was set to Nan, this indexes all of the properties where they arent Nan's.
@@ -435,8 +439,8 @@ class BasicLightning(pl.LightningModule):
         cv_target = cv_target[non_nan_cv_index]
         cv_predicted = cv_predicted[non_nan_cv_index]
 
-        rho_betaT_target = rho_betaT_target[non_nan_betaT_index]
-        rho_betaT_predicted = rho_betaT_predicted[non_nan_betaT_index]
+        betaT_target = betaT_target[non_nan_betaT_index]
+        betaT_predicted = betaT_predicted[non_nan_betaT_index]
 
         mu_jt_target = mu_jt_target[non_nan_mu_jt_index]
         mu_jt_predicted = mu_jt_predicted[non_nan_mu_jt_index]
@@ -448,10 +452,13 @@ class BasicLightning(pl.LightningModule):
         alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
         alphaP_loss = torch.mean(alphaP_loss)
         
+        Z_loss = ((Z_target-Z_predicted)**2)/var_Z
+        U_loss = ((U_target-U_predicted)**2)/var_U
+        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
         adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
         gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
         cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
-        rho_betaT_loss = 1/20*((rho_betaT_target-rho_betaT_predicted)**2)/var_rho_betaT
+        rho_betaT_loss = 1/20*((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2)/var_rho_betaT
         mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
         # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
@@ -471,6 +478,8 @@ class BasicLightning(pl.LightningModule):
         A_loss_required_for_DDP = torch.mean(A_loss_required_for_DDP)
 
         
+
+        # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
         mean_val_loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A_loss_required_for_DDP
         # loss = Z_loss+U_loss+A*torch.zeros_like(A)
 
