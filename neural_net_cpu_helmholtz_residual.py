@@ -214,7 +214,8 @@ class BasicLightning(pl.LightningModule):
 
 
         # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
-        loss = Z_loss+U_loss+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A*torch.zeros_like(A)
+        # loss = Z_loss+U_loss+A*torch.zeros_like(A)
 
 
         mean_train_loss = torch.mean(loss)
@@ -357,8 +358,8 @@ class BasicLightning(pl.LightningModule):
 
 
         # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
-        loss = Z_loss+U_loss+A*torch.zeros_like(A)
-
+        loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A*torch.zeros_like(A)
+        # loss = Z_loss+U_loss+A*torch.zeros_like(A)
 
         
         mean_val_loss = torch.mean(loss)
@@ -403,13 +404,14 @@ class BasicLightning(pl.LightningModule):
         return hessians
     
     def calculate_variance(self, Tensor_to_calculate_variance):
+        Tensor_to_calculate_variance = Tensor_to_calculate_variance[~torch.isnan(Tensor_to_calculate_variance)]
         variance = torch.var(torch.reshape(Tensor_to_calculate_variance,(-1,)))
         return variance
                                                                                                                            
 
 def train_func(config):
     # Read data from csv
-    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results_debug.txt',delimiter=" ")
+    data_df = pd.read_csv('/home/daniel/Documents/Research Project/Neural_Net_EOS/coallated_results_debug_working.txt',delimiter=" ")
     # Preprocessing the data
     data_df = data_df.dropna()
     # The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
@@ -486,7 +488,7 @@ def train_func(config):
                 val_dataloaders=val_dataloader
                 )
 
-scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":11})
+scaling_config = ScalingConfig(num_workers=1, use_gpu=False,resources_per_worker={"CPU":10})
 
 run_config = RunConfig(progress_reporter=reporter,
                        checkpoint_config=CheckpointConfig(
