@@ -16,6 +16,7 @@ import ray.train.lightning
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 import pickle
+import scipy.optimize
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -29,7 +30,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 46
+        self.layer_size = 45
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -448,14 +449,14 @@ class BasicLightning(pl.LightningModule):
         return adiabatic_index
 
 
-path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-28_12-12-46/TorchTrainer_58231b20_1_layer_size=46,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-28_12-12-46/lightning_logs/version_0/checkpoints/epoch=693-step=10410.ckpt"    
+path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-29_20-14-35/TorchTrainer_2a110ab8_1_layer_size=45,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-29_20-14-35/lightning_logs/version_0/checkpoints/epoch=2425-step=36390.ckpt"    
 split_path = str.split(path_to_checkpoint,"/")
 path_to_trainer = str.join("/",split_path[0:6])
 path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
 path_to_validation_data = str.join("/",[path_to_trainer,"validation_data_for_current_ANN.txt"])
 model = BasicLightning().load_from_checkpoint(path_to_checkpoint)
 model = model.double()
-model.eval()
+# model.eval()
 # data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
 # Preprocessing the data
 
@@ -494,27 +495,124 @@ input = torch.tensor([[0.5,2.0]])
 input.requires_grad = True
 train_inputs.requires_grad=True
 val_inputs.requires_grad = True
-predicted_cv = model.calculate_cv(val_inputs).detach().numpy()
-predicted_z = model.calculate_Z(val_inputs).detach().numpy()
-predicted_U = model.calculate_U(val_inputs).detach().numpy()
-predicted_P = model.calculate_P(val_inputs).detach().numpy()
-predicted_alphaP = model.calculate_alphaP(val_inputs).detach().numpy()
-predicted_betaT = model.calculate_betaT(val_inputs).detach().numpy()
-predicted_mujt = model.calculate_mu_jt(val_inputs).detach().numpy()
-predicted_gammaV = model.calculate_gammaV(val_inputs).detach().numpy()
-predicted_cp = model.calculate_cp(val_inputs).detach().numpy()
-predicted_adiabatic_index = model.calculate_adiabatic_index(val_inputs).detach().numpy()
-target_Z = val_arr[:,Z_column]
-target_cv = val_arr[:,cv_column]
-target_U = val_arr[:,internal_energy_column]
-target_P = val_arr[:,pressure_column]
-target_alphaP = val_arr[:,alphaP_column]
-target_betaT = val_arr[:,betaT_column]
-target_mujt = val_arr[:,mu_jt_column]
-target_gammaV = val_arr[:,gammaV_column]
-target_cp = val_arr[:,cp_column]
-target_adiabatic_index = val_arr[:,cp_column]/val_arr[:,cv_column]
 
+predicted_cv = model.calculate_cv(val_inputs).detach().numpy()[~np.isnan(val_arr[:,cv_column])]
+predicted_z = model.calculate_Z(val_inputs).detach().numpy()[~np.isnan(val_arr[:,Z_column])]
+predicted_U = model.calculate_U(val_inputs).detach().numpy()[~np.isnan(val_arr[:,internal_energy_column])]
+predicted_P = model.calculate_P(val_inputs).detach().numpy()[~np.isnan(val_arr[:,pressure_column])]
+predicted_alphaP = model.calculate_alphaP(val_inputs).detach().numpy()[~np.isnan(val_arr[:,alphaP_column])]
+predicted_betaT = model.calculate_betaT(val_inputs).detach().numpy()[~np.isnan(val_arr[:,betaT_column])]
+predicted_mujt = model.calculate_mu_jt(val_inputs).detach().numpy()[~np.isnan(val_arr[:,mu_jt_column])]
+predicted_gammaV = model.calculate_gammaV(val_inputs).detach().numpy()[~np.isnan(val_arr[:,gammaV_column])]
+predicted_cp = model.calculate_cp(val_inputs).detach().numpy()[~np.isnan(val_arr[:,cp_column])]
+predicted_adiabatic_index = model.calculate_adiabatic_index(val_inputs).detach().numpy()
+target_Z = val_arr[:,Z_column][~np.isnan(val_arr[:,Z_column])]
+target_cv = val_arr[:,cv_column][~np.isnan(val_arr[:,cv_column])]
+target_U = val_arr[:,internal_energy_column][~np.isnan(val_arr[:,internal_energy_column])]
+target_P = val_arr[:,pressure_column][~np.isnan(val_arr[:,pressure_column])]
+target_alphaP = val_arr[:,alphaP_column][~np.isnan(val_arr[:,alphaP_column])]
+target_betaT = val_arr[:,betaT_column][~np.isnan(val_arr[:,betaT_column])]
+target_mujt = val_arr[:,mu_jt_column][~np.isnan(val_arr[:,mu_jt_column])]
+target_gammaV = val_arr[:,gammaV_column][~np.isnan(val_arr[:,gammaV_column])]
+target_cp = val_arr[:,cp_column][~np.isnan(val_arr[:,cp_column])]
+
+def zeno_curve(density,temperature):
+    density.requires_grad=True
+    temperature.requires_grad = True
+    zero_densities = torch.zeros_like(density)
+    zero_densities.requires_grad = True
+    ideal_input = torch.stack((zero_densities,temperature),dim=-1)
+    ideal_input = ideal_input.double()
+    A_ideal = model.forward(ideal_input)
+    A_ideal = A_ideal/temperature
+    dAideal_drho = torch.autograd.grad(A_ideal,zero_densities,grad_outputs=torch.ones_like(A_ideal),create_graph=True)[0]
+    A_zeno = density*dAideal_drho
+    dA_zeno_drho = torch.autograd.grad(A_zeno,density,grad_outputs=torch.ones_like(A_zeno),create_graph=True)[0]
+    P_by_rho = density*dA_zeno_drho
+    P = P_by_rho*density
+    return P
+
+r = torch.tensor([0.3,0.5])
+T = torch.tensor([1.0,2.0])
+zeno_curve(r,T)
+
+
+def amagat_curve(T):
+    def find_dZ_dT(rho,T):
+        temperature = torch.tensor([T])
+        temperature = temperature.double()
+        temperature.requires_grad = True
+        rho = torch.tensor(rho)
+        rho = rho.double()
+        input_at_constant_density = torch.stack((rho,temperature),dim=-1)
+        input_at_constant_density = input_at_constant_density.double()
+        model.calculate_Z(input_at_constant_density)
+        dZ_dT= torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,0].detach().numpy()
+        return dZ_dT.item()
+
+    rho_at_dZ_dT_is__zero_for_T = scipy.optimize.root(find_dZ_dT,args=(T),x0=0.5).x
+
+    T = torch.tensor([T])
+    T = T.double()
+    T.requires_grad = True
+    rho_at_dZ_dT_is__zero_for_T = torch.tensor(rho_at_dZ_dT_is__zero_for_T)
+    rho_at_dZ_dT_is__zero_for_T.requires_grad = True
+    input_at_dZ_dT_is_zero= torch.stack((rho_at_dZ_dT_is__zero_for_T,T),dim=-1)
+    pressure = model.calculate_P(input_at_dZ_dT_is_zero)
+    return pressure.detach().numpy(),rho_at_dZ_dT_is__zero_for_T
+
+
+
+number_of_points_to_evaluate = 100
+amagat_pressure_list = []
+amagat_density_list = []
+amagat_temperature_range = np.linspace(0.01,1.5,number_of_points_to_evaluate)
+for temperature in amagat_temperature_range:
+    pressure, density =amagat_curve(temperature)
+    amagat_pressure_list.append(pressure)
+    amagat_density_list.append(density)
+sns.scatterplot(x=amagat_temperature_range.flatten(),y = np.array(amagat_pressure_list).flatten())
+plt.xlim(0.4,1.5)
+plt.ylim(0,0.21)
+# plt.show()
+
+zeno_density_ranage = torch.tensor(amagat_density_list)
+zeno_temperature_range = torch.linspace(0.1,1.5,number_of_points_to_evaluate)
+zeno_inputs = torch.stack((zeno_density_ranage,zeno_temperature_range),dim=-1)
+zeno_inputs = zeno_inputs.double()
+zeno_inputs.requires_grad = True
+zeno_pressure = model.calculate_P(zeno_inputs)
+sns.scatterplot(x=zeno_temperature_range.detach().numpy().flatten(),y = zeno_pressure.detach().numpy().flatten())
+plt.xlim(0.4,1.5)
+plt.ylim(0,0.21)
+plt.show()
+
+
+# sns.scatterplot(y = torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,1].detach().numpy(),x = temperature.detach().numpy())
+# plt.show()
+# model.calculate_P()
+# target_adiabatic_index = val_arr[:,cp_column]/val_arr[:,cv_column]
+
+# predicted_cv = model.calculate_cv(train_inputs).detach().numpy()
+# predicted_z = model.calculate_Z(train_inputs).detach().numpy()
+# predicted_U = model.calculate_U(train_inputs).detach().numpy()
+# predicted_P = model.calculate_P(train_inputs).detach().numpy()
+# predicted_alphaP = model.calculate_alphaP(train_inputs).detach().numpy()
+# predicted_betaT = model.calculate_betaT(train_inputs).detach().numpy()
+# predicted_mujt = model.calculate_mu_jt(train_inputs).detach().numpy()
+# predicted_gammaV = model.calculate_gammaV(train_inputs).detach().numpy()
+# predicted_cp = model.calculate_cp(train_inputs).detach().numpy()
+# predicted_adiabatic_index = model.calculate_adiabatic_index(train_inputs).detach().numpy()
+# target_Z = train_arr[:,Z_column]
+# target_cv = train_arr[:,cv_column]
+# target_U = train_arr[:,internal_energy_column]
+# target_P = train_arr[:,pressure_column]
+# target_alphaP = train_arr[:,alphaP_column]
+# target_betaT = train_arr[:,betaT_column]
+# target_mujt = train_arr[:,mu_jt_column]
+# target_gammaV = train_arr[:,gammaV_column]
+# target_cp = train_arr[:,cp_column]
+# target_adiabatic_index = train_arr[:,cp_column]/train_arr[:,cv_column]
 # sns.set_style("ticks")
 # sns.lineplot(x =[0,8],y=[0,8])
 # sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten())
@@ -557,13 +655,13 @@ target_adiabatic_index = val_arr[:,cp_column]/val_arr[:,cv_column]
 # plt.ylim(0,20)
 # plt.show()
 
-sns.set_style("ticks")
-sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten())
-plt.xlabel('Predicted_alphaP')
-plt.ylabel('Target_alphaP')
-plt.title('alpahP_parity')
-sns.lineplot(x =[0,10],y=[0,10])
-plt.show()
+# sns.set_style("ticks")
+# sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten())
+# plt.xlabel('Predicted_alphaP')
+# plt.ylabel('Target_alphaP')
+# plt.title('alpahP_parity')
+# sns.lineplot(x =[0,10],y=[0,10])
+# plt.show()
 
 # sns.set_style("ticks")
 # sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
@@ -576,141 +674,116 @@ plt.show()
 # plt.show()
 
 
-sns.set_style("ticks")
-fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
-
-sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
-sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
-axs[0, 0].set_xlabel('Predicted_Z')
-axs[0, 0].set_ylabel('Target_Z')
-axs[0, 0].set_title('Z_parity')
-
-sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1])
-sns.lineplot(x =[0,14],y=[0,14], ax = axs[0, 1])
-axs[0, 1].set_xlabel('Predicted_U')
-axs[0, 1].set_ylabel('Target_U')
-axs[0, 1].set_title('U_parity')
-
-sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2])
-sns.lineplot(x =[0,20],y=[0,20], ax = axs[0, 2])
-axs[0, 2].set_xlabel('Predicted_P')
-axs[0, 2].set_ylabel('Target_P')
-axs[0, 2].set_title('P_parity')
-
-sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
-axs[0, 3].set_xlabel('Predicted_cv')
-axs[0, 3].set_ylabel('Target_cv')
-axs[0, 3].set_title('cv_parity')
-sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
-
-sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten(), ax = axs[1, 0])
-sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
-axs[1, 0].set_xlabel('Predicted_Rho*betaT')
-axs[1, 0].set_ylabel('Target_Rho*betaT')
-axs[1, 0].set_title('Rho*betaT_parity')
-# axs[1, 0].set_xlim(0,20)
-# axs[1, 0].set_ylim(0,20)
-sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
-axs[0, 4].set_xlabel('predicted_Cp')
-axs[0, 4].set_ylabel('target_Cp')
-axs[0, 4].set_title('Cp_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 4])
-
-sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
-axs[1, 2].set_xlabel('Predicted_alphaP')
-axs[1, 2].set_ylabel('Target_alphaP')
-axs[1, 2].set_title('alphaP_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 2])
-
-sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1])
-axs[1, 1].set_xlabel('Predicted_gammaV')
-axs[1, 1].set_ylabel('Target_gammaV')
-axs[1, 1].set_title('gammaV_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 1])
-
-sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3])
-axs[1, 3].set_xlabel('predicted_mujt')
-axs[1, 3].set_ylabel('target_mujt')
-axs[1, 3].set_title('mujt_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
-
-sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4])
-axs[1, 4].set_xlabel('predicted_Cp/Cv')
-axs[1, 4].set_ylabel('target_Cp/Cv')
-axs[1, 4].set_title('Cp/Cv_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
-
-plt.show()
-
 # sns.set_style("ticks")
-# sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
-# plt.xlabel('Predicted_mujt')
-# plt.ylabel('Target_mujt')
-# plt.title('mujt_parity')
-# sns.lineplot(x =[-100,0],y=[-100,0])
-# plt.xlim(-100,0)
-# plt.ylim(-100,0)
+# fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
+
+# sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
+# sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
+# axs[0, 0].set_xlabel('Predicted_Z')
+# axs[0, 0].set_ylabel('Target_Z')
+# axs[0, 0].set_title('Z_parity')
+
+# sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1])
+# sns.lineplot(x =[0,14],y=[0,14], ax = axs[0, 1])
+# axs[0, 1].set_xlabel('Predicted_U')
+# axs[0, 1].set_ylabel('Target_U')
+# axs[0, 1].set_title('U_parity')
+
+# sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2])
+# sns.lineplot(x =[0,20],y=[0,20], ax = axs[0, 2])
+# axs[0, 2].set_xlabel('Predicted_P')
+# axs[0, 2].set_ylabel('Target_P')
+# axs[0, 2].set_title('P_parity')
+
+# sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
+# axs[0, 3].set_xlabel('Predicted_cv')
+# axs[0, 3].set_ylabel('Target_cv')
+# axs[0, 3].set_title('cv_parity')
+# sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
+
+# sns.scatterplot(x=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*predicted_betaT.flatten(),y=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*target_betaT.flatten(), ax = axs[1, 0])
+# sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
+# axs[1, 0].set_xlabel('Predicted_Rho*betaT')
+# axs[1, 0].set_ylabel('Target_Rho*betaT')
+# axs[1, 0].set_title('Rho*betaT_parity')
+# # axs[1, 0].set_xlim(0,20)
+# # axs[1, 0].set_ylim(0,20)
+
+# sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
+# axs[0, 4].set_xlabel('predicted_Cp')
+# axs[0, 4].set_ylabel('target_Cp')
+# axs[0, 4].set_title('Cp_parity')
+# sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 4])
+
+# sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
+# axs[1, 2].set_xlabel('Predicted_alphaP')
+# axs[1, 2].set_ylabel('Target_alphaP')
+# axs[1, 2].set_title('alphaP_parity')
+# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 2])
+
+# sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1])
+# axs[1, 1].set_xlabel('Predicted_gammaV')
+# axs[1, 1].set_ylabel('Target_gammaV')
+# axs[1, 1].set_title('gammaV_parity')
+# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 1])
+
+# sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3])
+# axs[1, 3].set_xlabel('predicted_mujt')
+# axs[1, 3].set_ylabel('target_mujt')
+# axs[1, 3].set_title('mujt_parity')
+# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
+
+# # sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4])
+# # axs[1, 4].set_xlabel('predicted_Cp/Cv')
+# # axs[1, 4].set_ylabel('target_Cp/Cv')
+# # axs[1, 4].set_title('Cp/Cv_parity')
+# # sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
+
 # plt.show()
 
+# def zeno_curve(density,temperature):
+#     """
+#     Calculates pressure from density and temperature for zeno curve
+
+#     Z = 1 for Z = P/(Rho*T)
+#     """
+#     rho = density
+#     T = temperature
+#     P = rho*T
+#     return P
 
 
-# sns.scatterplot(x = predicted_cv.flatten(),y = target_cv.flatten())
-# sns.lineplot(x =[0,60],y=[0,60])
-# plt.xlabel('Predicted_P')
-# plt.ylabel('Target_P')
-# plt.title('P_parity')
+# ##########
+# # Isotherm
+# ##########
+# def find_closest(array, value, n=100):
+#     array = np.asarray(array)
+#     idx = np.argsort(np.abs(array - value))[:n]
+#     return idx
+# temperature = 0.4927
+# index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],temperature,50)
+
+# isotherm = train_arr[index_of_points_close_to_temp,:]
+
+# P_isotherm_MD = isotherm[:,pressure_column]
+# density_MD = isotherm[:,density_column]
+
+
+# # Create a numpy array with values from 0 to 1
+# density = torch.linspace(0,0.8, 1000)
+
+# # Create a numpy array with a constant value
+# temperature = torch.full((1000,), temperature)
+
+# # Concatenate the two numpy arrays horizontally
+# tensor = torch.stack((density, temperature), dim=1).double()
+# tensor.requires_grad=True
+# P_isotherm = model.calculate_P(tensor)
+# sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label="ANN")
+# sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),label = "MD" )
+# plt.xlabel('Density')
+# plt.ylabel('Reduced Pressure')
 # plt.show()
-
-# T_predcited,Rho_predicted = model.extract_T_and_rho(train_inputs)
-# print(T_predcited)
-# print(train_inputs)
-# import torch
-# for i in np.arange(0,10,0.5):
-#     # Create a numpy array with values from 0 to 1
-#     density = torch.linspace(0,1, 100)
-
-#     # Create a numpy array with a constant value
-#     temperature = torch.full((100,), i)
-
-#     # Concatenate the two numpy arrays horizontally
-#     tensor = torch.stack((density, temperature), dim=1)
-#     tensor.requires_grad=True
-#     print(tensor)
-#     P_isotherm = model.calculate_P(tensor)
-#     sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label=str(i))
-# plt.show()
-
-
-##########
-# Isotherm
-##########
-def find_closest(array, value, n=100):
-    array = np.asarray(array)
-    idx = np.argsort(np.abs(array - value))[:n]
-    return idx
-index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],0.746975,100)
-
-isotherm = train_arr[index_of_points_close_to_temp,:]
-
-P_isotherm_MD = isotherm[:,pressure_column]
-density_MD = isotherm[:,density_column]
-
-
-# Create a numpy array with values from 0 to 1
-density = torch.linspace(0,0.9, 1000)
-
-# Create a numpy array with a constant value
-temperature = torch.full((1000,), 0.746975)
-
-# Concatenate the two numpy arrays horizontally
-tensor = torch.stack((density, temperature), dim=1).double()
-tensor.requires_grad=True
-P_isotherm = model.calculate_P(tensor)
-sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label="ANN")
-sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),label = "MD" )
-plt.xlabel('Density')
-plt.ylabel('Reduced Pressure')
-plt.show()
 
 ###################
 # Helmholtz surface
@@ -744,7 +817,7 @@ plt.title('Helmholtz Free Energy Surface')
 ################
 # num_points = 1000000
 # density = torch.linspace(0,1,num_points)
-# temperature = torch.full((num_points,), 0.45)
+# temperature = torch.full((num_points,), 0.5115)
 
 # input_tensor = torch.stack((density, temperature), dim=1).double()
 # input_tensor.requires_grad=True
@@ -760,7 +833,7 @@ plt.title('Helmholtz Free Energy Surface')
 #     mask = diff_chemcial_potential == value
 #     index_diff_zero = mask.nonzero().flatten()
 
-#     if (torch.abs(pressure[index_diff_zero]-pressure[-index_diff_zero-1])<1e-5):
+#     if (torch.abs(pressure[index_diff_zero]-pressure[-index_diff_zero-1])<1e-3):
 #         if pressure[index_diff_zero]>0:
 #             print("success")
 #             print((pressure[index_diff_zero],pressure[-index_diff_zero-1]))
