@@ -30,7 +30,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 46
+        self.layer_size = 45
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -459,7 +459,7 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_checkpoint = "/home/daniel/Documents/trainer/TrainedNaNs_LowLR/lightning_logs/version_0/checkpoints/epoch=18509-step=462750.ckpt"    
+path_to_checkpoint = "/home/daniel/Documents/trainer/TrainedNoNaN/lightning_logs/version_0/checkpoints/epoch=6972-step=104595.ckpt"    
 split_path = str.split(path_to_checkpoint,"/")
 path_to_trainer = str.join("/",split_path[0:6])
 path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
