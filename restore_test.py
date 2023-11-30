@@ -57,14 +57,6 @@ class BasicLightning(pl.LightningModule):
           nn.Tanh(),
           nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
-          nn.Linear(self.layer_size ,self.layer_size),
-          nn.Tanh(),
-          nn.Linear(self.layer_size ,self.layer_size),
-          nn.Tanh(),
-          nn.Linear(self.layer_size,self.layer_size),
-          nn.Tanh(),
-          nn.Linear(self.layer_size,self.layer_size),
-          nn.Tanh(),
           nn.Linear(self.layer_size,1),
         )
 
@@ -360,10 +352,10 @@ def train_func(config):
     train_targets = torch.tensor(train_arr[:,target_columns])
     val_inputs = torch.tensor(val_arr[:,[density_column,temperature_column]])
     val_targets = torch.tensor(val_arr[:,target_columns])
-    train_inputs = train_inputs.double()
-    train_targets = train_targets.double()
-    val_inputs = val_inputs.double()
-    val_targets = val_targets.double()
+    train_inputs = train_inputs.float()
+    train_targets = train_targets.float()
+    val_inputs = val_inputs.float()
+    val_targets = val_targets.float()
 
     # Loading inputs and targets into the dataloaders
     train_dataset = TensorDataset(train_inputs,train_targets)
@@ -373,7 +365,7 @@ def train_func(config):
 
     # Instantiating the neural network
     model = BasicLightning(config)
-    model.double()
+
     trainer = pl.Trainer(
         # Define the max number of epochs for the trainer, this is also enforced by the scheduler.
         max_epochs=max_number_of_training_epochs,
@@ -457,7 +449,7 @@ def tune_asha(num_samples,max_number_of_training_epochs):
                                                     num_samples=num_samples,
                                                     scheduler=scheduler
                                                     )
-                        ).restore("/home/daniel/ray_results/TorchTrainer_2023-11-16_21-56-44/",trainable=trainer,resume_unfinished=True)
+                        ).restore("/home/daniel/ray_results/TorchTrainer_2023-11-17_01-12-28/",trainable=trainer,resume_unfinished=True)
     return tuner.fit()
 
 

@@ -1,2 +1,2 @@
-Number of runs before NPT NVT convergence check: 5
-Number of runs after NPT NVT convergence check: 1
+Number of runs before NPT NVT convergence check: 4
+Number of runs after NPT NVT convergence check: 3

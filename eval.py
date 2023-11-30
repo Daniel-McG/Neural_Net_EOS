@@ -838,9 +838,9 @@ def fobj_crit(input, model):
 Tc0 = 0.522
 rhoc0 = 0.4
 # solving fobj_crit
-sol_crit = root(fobj_crit, x0=[rhoc0, Tc0], args=(model))
+sol_crit = root(fobj_crit, x0=[rhoc0, Tc0], args=(model),tol = 1e-60)
 rhoc_model, Tc_model = sol_crit.x
-
+print(sol_crit.x)
 # computing critical pressure
 Pc_model = model.calculate_P(torch.tensor([rhoc_model,Tc_model]))
 print(Pc_model)

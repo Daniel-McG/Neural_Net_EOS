@@ -73,13 +73,13 @@ class BasicLightning(pl.LightningModule):
         Configures optimiser
         '''
         optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
 
 
-        output_dict = {
-        "optimizer": optimiser,
-        "lr_scheduler": {"scheduler":scheduler}
-        }
+        # output_dict = {
+        # "optimizer": optimiser,
+        # "lr_scheduler": {"scheduler":scheduler}
+        # }
         return optimiser
 
     
@@ -113,7 +113,7 @@ class BasicLightning(pl.LightningModule):
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
         var_gammaV = self.calculate_variance(gammaV_target)
-        var_rho_betaT = self.calculate_variance(rho*betaT_target)
+        var_rho_betaT = self.calculate_variance(T**2*rho**2*betaT_target)
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
@@ -179,26 +179,27 @@ class BasicLightning(pl.LightningModule):
 
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
-        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
-        adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
-        gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
-        cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
-        
+        alphaP_loss = 1/50*((alphaP_target-alphaP_predicted)**2)/var_alphaP
+        adiabatic_index_loss = 1/50*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
+        gammmaV_loss = 1/50*((gammaV_target-gammaV_predicted)**2)/var_gammaV
+        cv_loss = 1/50*((cv_target-cv_predicted)**2)/var_cv
+        rho_betaT_loss = 1/50*((T**2*rho**2*betaT_target-T**2*rho**2*betaT_predicted)**2)/var_rho_betaT
+        mu_jt_loss = 1/50*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
-        loss = Z_loss+U_loss+cv_loss+alphaP_loss+A*torch.zeros_like(A)
+
+        loss = Z_loss+U_loss+cv_loss+gammmaV_loss+rho_betaT_loss+A*torch.zeros_like(A)
 
 
         mean_train_loss = torch.mean(loss)
-        self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
-        self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
-        self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
-        self.log("val_rhoBetaT_loss",torch.mean((rho*betaT_target-rho*betaT_predicted)**2))
-        self.log("val_alphaP_loss",torch.mean((alphaP_target-alphaP_predicted)**2))
-        self.log("val_mu_jt_loss",torch.mean((mu_jt_predicted-mu_jt_target)**2))
-        self.log("val_cp_predicted",torch.mean((cp_predicted-cp_target)**2))
-        self.log("val_adiabatic_index_loss",torch.mean((adiabatic_index_target-adiabatic_index_predicted)**2))
-        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2))
-        self.log("val_Z_loss",torch.mean((Z_predicted-Z_target)**2))  
+        self.log("val_cv_loss",torch.mean(cv_loss))
+        self.log("val_gammaV_loss",torch.mean(gammmaV_loss))
+        self.log("val_rhoBetaT_loss",torch.mean(rho_betaT_loss))
+        self.log("val_alphaP_loss",torch.mean(alphaP_loss))
+        self.log("val_mu_jt_loss",torch.mean(mu_jt_loss))
+        # self.log("val_cp_predicted",torch.mean(cp_loss)
+        self.log("val_adiabatic_index_loss",torch.mean(adiabatic_index_loss))
+        self.log("val_U_loss",torch.mean(U_loss))
+        self.log("val_Z_loss",torch.mean(Z_loss))  
         self.log("train_loss",mean_train_loss)
         return {"loss": mean_train_loss}
     
@@ -227,7 +228,7 @@ class BasicLightning(pl.LightningModule):
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
         var_gammaV = self.calculate_variance(gammaV_target)
-        var_rho_betaT = self.calculate_variance(rho*betaT_target)
+        var_rho_betaT = self.calculate_variance(T**2*rho**2*betaT_target)
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
@@ -292,13 +293,15 @@ class BasicLightning(pl.LightningModule):
 
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
-        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
-        adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
-        gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
-        cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
-        
+        alphaP_loss = 1/50*((alphaP_target-alphaP_predicted)**2)/var_alphaP
+        adiabatic_index_loss = 1/50*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
+        gammmaV_loss = 1/50*((gammaV_target-gammaV_predicted)**2)/var_gammaV
+        cv_loss = 1/50*((cv_target-cv_predicted)**2)/var_cv
+        rho_betaT_loss = 1/50*((T**2*rho**2*betaT_target-T**2*rho**2*betaT_predicted)**2)/var_rho_betaT
+        mu_jt_loss = 1/50*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
-        loss = Z_loss+U_loss+cv_loss+A*torch.zeros_like(A)
+
+        loss = Z_loss+U_loss+cv_loss+gammmaV_loss+rho_betaT_loss+A*torch.zeros_like(A)
 
 
         
@@ -355,7 +358,7 @@ def train_func(config):
     # Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
     # very far from the typical 0-1 range we want for training a neural network
 
-    train_df,test_df = train_test_split(data_df,train_size=0.8)
+    train_df,test_df = train_test_split(data_df,train_size=0.7)
 
     train_arr = train_df.values
     val_arr = test_df.values

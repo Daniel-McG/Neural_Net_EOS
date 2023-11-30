@@ -73,14 +73,14 @@ class BasicLightning(pl.LightningModule):
         Configures optimiser
         '''
         optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
 
 
-        output_dict = {
-        "optimizer": optimiser,
-        "lr_scheduler": {"scheduler":scheduler}
-        }
-        return output_dict
+        # output_dict = {
+        # "optimizer": optimiser,
+        # "lr_scheduler": {"scheduler":scheduler}
+        # }
+        return optimiser
 
     
     def training_step(self,train_batch,batch_index):

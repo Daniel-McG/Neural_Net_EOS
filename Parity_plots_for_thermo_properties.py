@@ -33,6 +33,8 @@ non_nan_alphaP = ~np.isnan(arr[:,alphaP_column])
 
 # # indices = np.where(np.logical_and(np.isfinite(gammaV_from_thermo_relation), gammaV_from_thermo_relation != np.inf, gammaV_from_thermo_relation != -np.inf))
 # # indicies = 1
+less_than_1 = pd.DataFrame(arr[:,temperature_column])<0.52
+print(less_than_1.value_counts())
 gammaV_from_data_coallation = debug_arr[non_nan_alphaP,gammaV_column].flatten()
 gammaV_from_thermo_relation = debug_arr[non_nan_alphaP,alphaP_column].flatten()/debug_arr[non_nan_alphaP,betaT_column].flatten()
 
@@ -48,16 +50,34 @@ cp_from_data_coallation = arr[:,cp_column].flatten()
 # # cp_from_thermo_relation_debug = debug_arr[:,cv_column] + (debug_arr[:,temperature_column]/debug_arr[:,density_column])*((debug_arr[:,alphaP_column]**2)/debug_arr[:,betaT_column])
 # # cp_from_data_coallation_debug = debug_arr[:,cp_column]
 # # mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
-# # mu_jt_from_data_coallation = arr[:,mu_jt_column]
-# # mu_jt_from_thermo_relation = (1/(arr[:,density_column]*arr[:,cp_column]))*((arr[:,temperature_column]*arr[:,alphaP_column])-1)
-# Z_from_thermo_relation= arr[:,pressure_column]/(arr[:,density_column]*arr[:,temperature_column])
-# Z_from_data_coallation= arr[:,Z_column]
+mu_jt_from_data_coallation = arr[:,mu_jt_column]
+mu_jt_from_thermo_relation = (1/(arr[:,density_column]*arr[:,cp_column]))*((arr[:,temperature_column]*arr[:,alphaP_column])-1)
+Z_from_thermo_relation= arr[:,pressure_column]/(arr[:,density_column]*arr[:,temperature_column])
+Z_from_data_coallation= arr[:,Z_column]
 
 
 
 # # print(pd.DataFrame(np.abs(((arr[:,alphaP_column]/arr[:,betaT_column])- (arr[:,gammaV_column])))<1e-1).value_counts())
 # # sns.histplot(data = arr[non_zero_betaT_index,alphaP_column]/arr[non_zero_betaT_index,betaT_column])
-# # plt.show()
+# # plt.show()s
+# sns.kdeplot(data = arr[:,betaT_column],label = "N")
+# sns.scatterplot(x = arr[:,temperature_column], y =arr[:,alphaP_column] ,label = "R")s
+print(pd.DataFrame(arr[:,temperature_column][arr[:,temperature_column]<0.52]).describe())
+# print(pd.DataFrame(arr[:,betaT_column]*arr[:,density_column]**2*arr[:,temperature_column]**2).describe())
+
+# sns.histplot(data =  arr[:,betaT_column],label="Only BetaT")
+# sns.histplot(data =  arr[:,betaT_column]*arr[:,density_column],label="Rho*BetaT")
+# sns.histplot(data =  arr[:,betaT_column]*arr[:,density_column]**2*arr[:,temperature_column]**2,label="Rho^2*T^2*BetaT")
+sns.histplot(data= arr[:,temperature_column][arr[:,temperature_column]<0.52],bins=500)
+# sns.kdeplot(data =  arr[:,mu_jt_column],label="m")
+plt.legend()
+plt.show()
+
+sns.histplot(data =  arr[:,betaT_column]*arr[:,density_column]**2*arr[:,temperature_column]**2,label="Rho^2*T^2*BetaT")
+# sns.kdeplot(data =  arr[:,mu_jt_column],label="m")
+plt.legend()
+plt.show()
+
 sns.scatterplot(x=gammaV_from_data_coallation,y=gammaV_from_thermo_relation,color ="r" )
 # sns.scatterplot(x = gammaV_from_data_coallation_debug,y=gammaV_from_thermo_relation_debug,color="c")
 plt.xlabel(r"$\gamma_V$ from MD")
@@ -77,22 +97,24 @@ plt.xlim(range)
 plt.ylim(range)
 plt.show()
 
-# sns.scatterplot(x=Z_from_data_coallation,y=Z_from_thermo_relation,color ="r" )
+sns.scatterplot(x=Z_from_data_coallation,y=Z_from_thermo_relation,color ="r" )
 # # sns.scatterplot(x = cp_from_data_coallation_debug,y=cp_from_thermo_relation_debug,color="c")
-# plt.xlabel("Z from MD")
-# plt.ylabel("Z from relation")
-# range = [0,10]
-# sns.lineplot(x=range,y=range)
-# plt.xlim(range)
-# plt.ylim(range)
-# plt.show()
+plt.xlabel("Z from MD")
+plt.ylabel("Z from relation")
+range = [0,10]
+sns.lineplot(x=range,y=range)
+plt.xlim(range)
+plt.ylim(range)
+plt.show()
 
-# sns.scatterplot(x=mu_jt_from_data_coallation,y=mu_jt_from_thermo_relation,color ="r" )
+sns.scatterplot(x=mu_jt_from_data_coallation,y=mu_jt_from_thermo_relation,color ="r" )
 # # sns.scatterplot(x = cp_from_data_coallation_debug,y=cp_from_thermo_relation_debug,color="c")
 # plt.xlabel("mu_jt from MD")
 # plt.ylabel("mu_jt from relation")
-# range = [0,10]
-# sns.lineplot(x=range,y=range)
-# plt.xlim(range)
-# plt.ylim(range)
-# plt.show()
+range = [0,10]
+sns.lineplot(x=range,y=range)
+plt.xlim(range)
+plt.ylim(range)
+plt.show()
+
+

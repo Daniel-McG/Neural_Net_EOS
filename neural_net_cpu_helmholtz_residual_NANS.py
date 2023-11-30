@@ -73,14 +73,14 @@ class BasicLightning(pl.LightningModule):
         Configures optimiser
         '''
         optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
 
 
-        output_dict = {
-        "optimizer": optimiser,
-        "lr_scheduler": {"scheduler":scheduler}
-        }
-        return output_dict
+        # output_dict = {
+        # "optimizer": optimiser,
+        # "lr_scheduler": {"scheduler":scheduler}
+        # }
+        return optimiser
 
     
     def training_step(self,train_batch,batch_index):
@@ -240,13 +240,7 @@ class BasicLightning(pl.LightningModule):
         mu_jt_target = mu_jt_target[non_nan_mu_jt_index]
         mu_jt_predicted = mu_jt_predicted[non_nan_mu_jt_index]
 
-        Z_loss = ((Z_target-Z_predicted)**2)/var_Z
-        U_loss = ((U_target-U_predicted)**2)/var_U
-        # alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
 
-        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
-        alphaP_loss = torch.mean(alphaP_loss)
-        
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
         alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
@@ -256,12 +250,6 @@ class BasicLightning(pl.LightningModule):
         rho_betaT_loss = 1/20*((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2)/var_rho_betaT
         mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
 
-        # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
-        # this just fudges the output to 0 so that it doesn't error.
-
-        A_loss_required_for_DDP = A*torch.zeros_like(A)
-
-
         Z_loss = torch.mean(Z_loss)
         U_loss = torch.mean(U_loss)
         alphaP_loss = torch.mean(alphaP_loss)
@@ -270,6 +258,13 @@ class BasicLightning(pl.LightningModule):
         cv_loss = torch.mean(cv_loss)
         rho_betaT_loss = torch.mean(rho_betaT_loss)
         mu_jt_loss = torch.mean(mu_jt_loss)
+
+
+
+        # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
+        # this just fudges the output to 0 so that it doesn't error.
+
+        A_loss_required_for_DDP = A*torch.zeros_like(A)
         A_loss_required_for_DDP = torch.mean(A_loss_required_for_DDP)
 
         
@@ -279,19 +274,19 @@ class BasicLightning(pl.LightningModule):
 
 
 
-        mean_train_loss = torch.mean(loss)
-        self.log("val_P_loss",torch.mean((P_predicted-P_target)**2)) 
-        self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
-        self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
-        self.log("val_rhoBetaT_loss",torch.mean((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2))
-        self.log("val_alphaP_loss",torch.mean((alphaP_target-alphaP_predicted)**2))
-        self.log("val_mu_jt_loss",torch.mean((mu_jt_predicted-mu_jt_target)**2))
-        self.log("val_cp_predicted",torch.mean((cp_predicted-cp_target)**2))
-        self.log("val_adiabatic_index_loss",torch.mean((adiabatic_index_target-adiabatic_index_predicted)**2))
-        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2))
-        self.log("val_Z_loss",torch.mean((Z_predicted-Z_target)**2))  
-        self.log("train_loss",mean_train_loss)
-        return {"loss": mean_train_loss}
+
+        self.log("train_P_loss",torch.mean((P_predicted-P_target)**2)) 
+        self.log("train_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
+        self.log("train_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
+        self.log("train_rhoBetaT_loss",torch.mean((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2))
+        self.log("train_alphaP_loss",torch.mean((alphaP_target-alphaP_predicted)**2))
+        self.log("train_mu_jt_loss",torch.mean((mu_jt_predicted-mu_jt_target)**2))
+        self.log("train_cp_predicted",torch.mean((cp_predicted-cp_target)**2))
+        self.log("train_adiabatic_index_loss",torch.mean((adiabatic_index_target-adiabatic_index_predicted)**2))
+        self.log("train_U_loss",torch.mean((U_target-U_predicted)**2))
+        self.log("train_Z_loss",torch.mean((Z_predicted-Z_target)**2))  
+        self.log("train_loss",loss)
+        return {"loss": loss}
     
     def validation_step(self, val_batch, batch_idx):
 
@@ -447,26 +442,12 @@ class BasicLightning(pl.LightningModule):
 
         Z_loss = ((Z_target-Z_predicted)**2)/var_Z
         U_loss = ((U_target-U_predicted)**2)/var_U
-        # alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
-
-        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
-        alphaP_loss = torch.mean(alphaP_loss)
-        
-        Z_loss = ((Z_target-Z_predicted)**2)/var_Z
-        U_loss = ((U_target-U_predicted)**2)/var_U
         alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
         adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
         gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
         cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
         rho_betaT_loss = 1/20*((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2)/var_rho_betaT
         mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
-
-        # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
-        # this just fudges the output to 0 so that it doesn't error.
-
-        A_loss_required_for_DDP = A*torch.zeros_like(A)
-
-
         Z_loss = torch.mean(Z_loss)
         U_loss = torch.mean(U_loss)
         alphaP_loss = torch.mean(alphaP_loss)
@@ -475,17 +456,26 @@ class BasicLightning(pl.LightningModule):
         cv_loss = torch.mean(cv_loss)
         rho_betaT_loss = torch.mean(rho_betaT_loss)
         mu_jt_loss = torch.mean(mu_jt_loss)
+
+
+
+        # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
+        # this just fudges the output to 0 so that it doesn't error.
+
+        A_loss_required_for_DDP = A*torch.zeros_like(A)
         A_loss_required_for_DDP = torch.mean(A_loss_required_for_DDP)
 
         
 
         # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
-        mean_val_loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A_loss_required_for_DDP
-        # loss = Z_loss+U_loss+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A_loss_required_for_DDP
 
 
-        self.log("val_loss",mean_val_loss) 
-        return {"val_loss": mean_val_loss}
+
+
+
+        self.log("val_loss",loss) 
+        return {"val_loss": loss}
     
     def backward(self, loss):
 
