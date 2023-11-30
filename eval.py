@@ -16,7 +16,7 @@ import ray.train.lightning
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 import pickle
-import scipy.optimize
+from scipy.optimize import root
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -30,7 +30,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 45
+        self.layer_size = 46
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -447,9 +447,19 @@ class BasicLightning(pl.LightningModule):
         cv = self.calculate_cv(input)
         adiabatic_index = cp/cv
         return adiabatic_index
+    def calculate_d2P_drho2(self,input):
+        input.requires_grad=True
+        T, rho = self.extract_T_and_rho(input)
+        dA_drho = self.calculate_dA_drho(input)
+        dA_drho = torch.reshape(dA_drho,(-1,))
+        d2A_drho2 = self.calculate_d2A_drho2(input)
+        d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
+        d3A_drho3 = torch.autograd.grad(d2A_drho2,input,grad_outputs=torch.ones_like(d2A_drho2),create_graph=True)[0][:,0]
+        d2P_drho2 = 2*dA_drho+4*rho*d2A_drho2+rho**2*d3A_drho3
+        return d2P_drho2
 
 
-path_to_checkpoint = "/home/daniel/ray_results/TorchTrainer_2023-11-29_20-14-35/TorchTrainer_2a110ab8_1_layer_size=45,lr=0.0001,weight_decay_coefficient=0.0000_2023-11-29_20-14-35/lightning_logs/version_0/checkpoints/epoch=2425-step=36390.ckpt"    
+path_to_checkpoint = "/home/daniel/Documents/trainer/TrainedNaNs_LowLR/lightning_logs/version_0/checkpoints/epoch=18509-step=462750.ckpt"    
 split_path = str.split(path_to_checkpoint,"/")
 path_to_trainer = str.join("/",split_path[0:6])
 path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
@@ -516,76 +526,76 @@ target_mujt = val_arr[:,mu_jt_column][~np.isnan(val_arr[:,mu_jt_column])]
 target_gammaV = val_arr[:,gammaV_column][~np.isnan(val_arr[:,gammaV_column])]
 target_cp = val_arr[:,cp_column][~np.isnan(val_arr[:,cp_column])]
 
-def zeno_curve(density,temperature):
-    density.requires_grad=True
-    temperature.requires_grad = True
-    zero_densities = torch.zeros_like(density)
-    zero_densities.requires_grad = True
-    ideal_input = torch.stack((zero_densities,temperature),dim=-1)
-    ideal_input = ideal_input.double()
-    A_ideal = model.forward(ideal_input)
-    A_ideal = A_ideal/temperature
-    dAideal_drho = torch.autograd.grad(A_ideal,zero_densities,grad_outputs=torch.ones_like(A_ideal),create_graph=True)[0]
-    A_zeno = density*dAideal_drho
-    dA_zeno_drho = torch.autograd.grad(A_zeno,density,grad_outputs=torch.ones_like(A_zeno),create_graph=True)[0]
-    P_by_rho = density*dA_zeno_drho
-    P = P_by_rho*density
-    return P
+# def zeno_curve(density,temperature):
+#     density.requires_grad=True
+#     temperature.requires_grad = True
+#     zero_densities = torch.zeros_like(density)
+#     zero_densities.requires_grad = True
+#     ideal_input = torch.stack((zero_densities,temperature),dim=-1)
+#     ideal_input = ideal_input.double()
+#     A_ideal = model.forward(ideal_input)
+#     A_ideal = A_ideal/temperature
+#     dAideal_drho = torch.autograd.grad(A_ideal,zero_densities,grad_outputs=torch.ones_like(A_ideal),create_graph=True)[0]
+#     A_zeno = density*dAideal_drho
+#     dA_zeno_drho = torch.autograd.grad(A_zeno,density,grad_outputs=torch.ones_like(A_zeno),create_graph=True)[0]
+#     P_by_rho = density*dA_zeno_drho
+#     P = P_by_rho*density
+#     return P
 
-r = torch.tensor([0.3,0.5])
-T = torch.tensor([1.0,2.0])
-zeno_curve(r,T)
-
-
-def amagat_curve(T):
-    def find_dZ_dT(rho,T):
-        temperature = torch.tensor([T])
-        temperature = temperature.double()
-        temperature.requires_grad = True
-        rho = torch.tensor(rho)
-        rho = rho.double()
-        input_at_constant_density = torch.stack((rho,temperature),dim=-1)
-        input_at_constant_density = input_at_constant_density.double()
-        model.calculate_Z(input_at_constant_density)
-        dZ_dT= torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,0].detach().numpy()
-        return dZ_dT.item()
-
-    rho_at_dZ_dT_is__zero_for_T = scipy.optimize.root(find_dZ_dT,args=(T),x0=0.5).x
-
-    T = torch.tensor([T])
-    T = T.double()
-    T.requires_grad = True
-    rho_at_dZ_dT_is__zero_for_T = torch.tensor(rho_at_dZ_dT_is__zero_for_T)
-    rho_at_dZ_dT_is__zero_for_T.requires_grad = True
-    input_at_dZ_dT_is_zero= torch.stack((rho_at_dZ_dT_is__zero_for_T,T),dim=-1)
-    pressure = model.calculate_P(input_at_dZ_dT_is_zero)
-    return pressure.detach().numpy(),rho_at_dZ_dT_is__zero_for_T
+# r = torch.tensor([0.3,0.5])
+# T = torch.tensor([1.0,2.0])
+# zeno_curve(r,T)
 
 
+# def amagat_curve(T):
+#     def find_dZ_dT(rho,T):
+#         temperature = torch.tensor([T])
+#         temperature = temperature.double()
+#         temperature.requires_grad = True
+#         rho = torch.tensor(rho)
+#         rho = rho.double()
+#         input_at_constant_density = torch.stack((rho,temperature),dim=-1)
+#         input_at_constant_density = input_at_constant_density.double()
+#         model.calculate_Z(input_at_constant_density)
+#         dZ_dT= torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,0].detach().numpy()
+#         return dZ_dT.item()
 
-number_of_points_to_evaluate = 100
-amagat_pressure_list = []
-amagat_density_list = []
-amagat_temperature_range = np.linspace(0.01,1.5,number_of_points_to_evaluate)
-for temperature in amagat_temperature_range:
-    pressure, density =amagat_curve(temperature)
-    amagat_pressure_list.append(pressure)
-    amagat_density_list.append(density)
-sns.scatterplot(x=amagat_temperature_range.flatten(),y = np.array(amagat_pressure_list).flatten())
-plt.xlim(0.4,1.5)
-plt.ylim(0,0.21)
+#     rho_at_dZ_dT_is__zero_for_T = scipy.optimize.root(find_dZ_dT,args=(T),x0=0.5).x
+
+#     T = torch.tensor([T])
+#     T = T.double()
+#     T.requires_grad = True
+#     rho_at_dZ_dT_is__zero_for_T = torch.tensor(rho_at_dZ_dT_is__zero_for_T)
+#     rho_at_dZ_dT_is__zero_for_T.requires_grad = True
+#     input_at_dZ_dT_is_zero= torch.stack((rho_at_dZ_dT_is__zero_for_T,T),dim=-1)
+#     pressure = model.calculate_P(input_at_dZ_dT_is_zero)
+#     return pressure.detach().numpy(),rho_at_dZ_dT_is__zero_for_T
+
+
+
+# number_of_points_to_evaluate = 100
+# amagat_pressure_list = []
+# amagat_density_list = []
+# amagat_temperature_range = np.linspace(0.01,1.5,number_of_points_to_evaluate)
+# for temperature in amagat_temperature_range:
+#     pressure, density =amagat_curve(temperature)
+#     amagat_pressure_list.append(pressure)
+#     amagat_density_list.append(density)
+# sns.scatterplot(x=amagat_temperature_range.flatten(),y = np.array(amagat_pressure_list).flatten())
+# plt.xlim(0.4,1.5)
+# plt.ylim(0,0.21)
+# # plt.show()
+
+# zeno_density_ranage = torch.tensor(amagat_density_list)
+# zeno_temperature_range = torch.linspace(0.1,1.5,number_of_points_to_evaluate)
+# zeno_inputs = torch.stack((zeno_density_ranage,zeno_temperature_range),dim=-1)
+# zeno_inputs = zeno_inputs.double()
+# zeno_inputs.requires_grad = True
+# zeno_pressure = model.calculate_P(zeno_inputs)
+# sns.scatterplot(x=zeno_temperature_range.detach().numpy().flatten(),y = zeno_pressure.detach().numpy().flatten())
+# plt.xlim(0.4,1.5)
+# plt.ylim(0,0.21)
 # plt.show()
-
-zeno_density_ranage = torch.tensor(amagat_density_list)
-zeno_temperature_range = torch.linspace(0.1,1.5,number_of_points_to_evaluate)
-zeno_inputs = torch.stack((zeno_density_ranage,zeno_temperature_range),dim=-1)
-zeno_inputs = zeno_inputs.double()
-zeno_inputs.requires_grad = True
-zeno_pressure = model.calculate_P(zeno_inputs)
-sns.scatterplot(x=zeno_temperature_range.detach().numpy().flatten(),y = zeno_pressure.detach().numpy().flatten())
-plt.xlim(0.4,1.5)
-plt.ylim(0,0.21)
-plt.show()
 
 
 # sns.scatterplot(y = torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,1].detach().numpy(),x = temperature.detach().numpy())
@@ -674,70 +684,70 @@ plt.show()
 # plt.show()
 
 
-# sns.set_style("ticks")
-# fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
+sns.set_style("ticks")
+fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
 
-# sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
-# sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
-# axs[0, 0].set_xlabel('Predicted_Z')
-# axs[0, 0].set_ylabel('Target_Z')
-# axs[0, 0].set_title('Z_parity')
+sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
+sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
+axs[0, 0].set_xlabel('Predicted_Z')
+axs[0, 0].set_ylabel('Target_Z')
+axs[0, 0].set_title('Z_parity')
 
-# sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1])
-# sns.lineplot(x =[0,14],y=[0,14], ax = axs[0, 1])
-# axs[0, 1].set_xlabel('Predicted_U')
-# axs[0, 1].set_ylabel('Target_U')
-# axs[0, 1].set_title('U_parity')
+sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1])
+sns.lineplot(x =[0,14],y=[0,14], ax = axs[0, 1])
+axs[0, 1].set_xlabel('Predicted_U')
+axs[0, 1].set_ylabel('Target_U')
+axs[0, 1].set_title('U_parity')
 
-# sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2])
-# sns.lineplot(x =[0,20],y=[0,20], ax = axs[0, 2])
-# axs[0, 2].set_xlabel('Predicted_P')
-# axs[0, 2].set_ylabel('Target_P')
-# axs[0, 2].set_title('P_parity')
+sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2])
+sns.lineplot(x =[0,20],y=[0,20], ax = axs[0, 2])
+axs[0, 2].set_xlabel('Predicted_P')
+axs[0, 2].set_ylabel('Target_P')
+axs[0, 2].set_title('P_parity')
 
-# sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
-# axs[0, 3].set_xlabel('Predicted_cv')
-# axs[0, 3].set_ylabel('Target_cv')
-# axs[0, 3].set_title('cv_parity')
-# sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
+sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
+axs[0, 3].set_xlabel('Predicted_cv')
+axs[0, 3].set_ylabel('Target_cv')
+axs[0, 3].set_title('cv_parity')
+sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
 
-# sns.scatterplot(x=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*predicted_betaT.flatten(),y=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*target_betaT.flatten(), ax = axs[1, 0])
-# sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
-# axs[1, 0].set_xlabel('Predicted_Rho*betaT')
-# axs[1, 0].set_ylabel('Target_Rho*betaT')
-# axs[1, 0].set_title('Rho*betaT_parity')
-# # axs[1, 0].set_xlim(0,20)
-# # axs[1, 0].set_ylim(0,20)
+sns.scatterplot(x=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*predicted_betaT.flatten(),y=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*target_betaT.flatten(), ax = axs[1, 0])
+sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
+axs[1, 0].set_xlabel('Predicted_Rho*betaT')
+axs[1, 0].set_ylabel('Target_Rho*betaT')
+axs[1, 0].set_title('Rho*betaT_parity')
+# axs[1, 0].set_xlim(0,20)
+# axs[1, 0].set_ylim(0,20)
 
-# sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
-# axs[0, 4].set_xlabel('predicted_Cp')
-# axs[0, 4].set_ylabel('target_Cp')
-# axs[0, 4].set_title('Cp_parity')
-# sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 4])
+sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
+axs[0, 4].set_xlabel('predicted_Cp')
+axs[0, 4].set_ylabel('target_Cp')
+axs[0, 4].set_title('Cp_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 4])
 
-# sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
-# axs[1, 2].set_xlabel('Predicted_alphaP')
-# axs[1, 2].set_ylabel('Target_alphaP')
-# axs[1, 2].set_title('alphaP_parity')
-# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 2])
+sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
+axs[1, 2].set_xlabel('Predicted_alphaP')
+axs[1, 2].set_ylabel('Target_alphaP')
+axs[1, 2].set_title('alphaP_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 2])
 
-# sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1])
-# axs[1, 1].set_xlabel('Predicted_gammaV')
-# axs[1, 1].set_ylabel('Target_gammaV')
-# axs[1, 1].set_title('gammaV_parity')
-# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 1])
+sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1])
+axs[1, 1].set_xlabel('Predicted_gammaV')
+axs[1, 1].set_ylabel('Target_gammaV')
+axs[1, 1].set_title('gammaV_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 1])
 
-# sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3])
-# axs[1, 3].set_xlabel('predicted_mujt')
-# axs[1, 3].set_ylabel('target_mujt')
-# axs[1, 3].set_title('mujt_parity')
-# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
+sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3])
+axs[1, 3].set_xlabel('predicted_mujt')
+axs[1, 3].set_ylabel('target_mujt')
+axs[1, 3].set_title('mujt_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
 
-# # sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4])
-# # axs[1, 4].set_xlabel('predicted_Cp/Cv')
-# # axs[1, 4].set_ylabel('target_Cp/Cv')
-# # axs[1, 4].set_title('Cp/Cv_parity')
-# # sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
+# sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4])
+# axs[1, 4].set_xlabel('predicted_Cp/Cv')
+# axs[1, 4].set_ylabel('target_Cp/Cv')
+# axs[1, 4].set_title('Cp/Cv_parity')
+# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
 
 # plt.show()
 
@@ -810,6 +820,30 @@ ax.set_zlabel('Helmholtz Free Energy')
 plt.title('Helmholtz Free Energy Surface')
 
 # plt.show()
+
+def fobj_crit(input, model):
+    rhoad, Tad = np.split(np.asarray(input), 2)
+    input = torch.tensor([input])
+    input.requires_grad=True
+    input = input.double()
+
+    press = model.calculate_P(input).detach().numpy()
+    dpress = model.calculate_dP_drho(input).detach().numpy()
+    d2press = model.calculate_d2P_drho2(input).detach().numpy()
+    
+    fo = np.hstack([dpress, 2*dpress/rhoad + d2press])
+    return fo
+
+# initial guess
+Tc0 = 0.522
+rhoc0 = 0.4
+# solving fobj_crit
+sol_crit = root(fobj_crit, x0=[rhoc0, Tc0], args=(model))
+rhoc_model, Tc_model = sol_crit.x
+
+# computing critical pressure
+Pc_model = model.calculate_P(torch.tensor([rhoc_model,Tc_model]))
+print(Pc_model)
 
 
 ################
