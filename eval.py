@@ -30,7 +30,7 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 45
+        self.layer_size = 46
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -459,12 +459,12 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_checkpoint = "/home/daniel/Documents/trainer/TrainedNoNaN/lightning_logs/version_0/checkpoints/epoch=6972-step=104595.ckpt"    
-split_path = str.split(path_to_checkpoint,"/")
-path_to_trainer = str.join("/",split_path[0:6])
-path_to_training_data = str.join("/",[path_to_trainer,"training_data_for_current_ANN.txt"])
-path_to_validation_data = str.join("/",[path_to_trainer,"validation_data_for_current_ANN.txt"])
-model = BasicLightning().load_from_checkpoint(path_to_checkpoint)
+# path_to_checkpoint = r"Z:home\ray_results\TorchTrainer_2023-11-30_19-02-56\TorchTrainer_196fc40c_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-11-30_19-03-00\lightning_logs\version_0\checkpoints\"    
+# split_path = str.split(path_to_checkpoint,r'\')
+# path_to_trainer = str.join("/",split_path[0:6])
+path_to_training_data = r"Z:\home\ray_results\TorchTrainer_2023-11-30_22-46-28\TorchTrainer_a1112689_1_layer_size=46,lr=0.0000,weight_decay_coefficient=0.0000_2023-11-30_22-46-31\training_data_for_current_ANN.txt" 
+path_to_validation_data = r"Z:\home\ray_results\TorchTrainer_2023-11-30_22-46-28\TorchTrainer_a1112689_1_layer_size=46,lr=0.0000,weight_decay_coefficient=0.0000_2023-11-30_22-46-31\validation_data_for_current_ANN.txt"
+model = BasicLightning.load_from_checkpoint(r"Z:\home\ray_results\TorchTrainer_2023-11-30_22-46-28\TorchTrainer_a1112689_1_layer_size=46,lr=0.0000,weight_decay_coefficient=0.0000_2023-11-30_22-46-31\lightning_logs\version_0\checkpoints\epoch=18946-step=625251.ckpt")
 model = model.double()
 # model.eval()
 # data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
@@ -749,7 +749,7 @@ sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
 # axs[1, 4].set_title('Cp/Cv_parity')
 # sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
 
-# plt.show()
+plt.show()
 
 # def zeno_curve(density,temperature):
 #     """

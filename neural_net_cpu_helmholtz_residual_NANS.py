@@ -33,7 +33,7 @@ max_number_of_training_epochs = 2000000
 
 reporter = CLIReporter(max_progress_rows=5)
 
-ray.init(log_to_driver=True)
+ray.init(log_to_driver=True,include_dashboard=False)
 data_scaling = False
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 # device = torch.device("cpu")
@@ -58,6 +58,10 @@ class BasicLightning(pl.LightningModule):
           nn.Tanh(),
           nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
+          nn.Linear(self.layer_size,self.layer_size),
+          nn.Tanh(),
+          nn.Linear(self.layer_size,self.layer_size),
+          nn.Tanh(),
           nn.Linear(self.layer_size,1),
         )
 
@@ -72,7 +76,7 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
+        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr)
         # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
 
 

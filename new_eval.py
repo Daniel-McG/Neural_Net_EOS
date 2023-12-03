@@ -17,6 +17,7 @@ from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 import pickle
 from scipy.optimize import root
+
 logger = TensorBoardLogger("tb_logs", name="my_model")
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -30,11 +31,15 @@ class BasicLightning(pl.LightningModule):
         super(BasicLightning,self).__init__() 
         self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = 46
+        self.layer_size = 45
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
           nn.Linear(2,self.layer_size),
+          nn.Tanh(),
+          nn.Linear(self.layer_size,self.layer_size),
+          nn.Tanh(),
+          nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
           nn.Linear(self.layer_size,self.layer_size),
           nn.Tanh(),
@@ -462,9 +467,9 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TrainedNaNs_LowLR\training_data_for_current_ANN.txt" 
-path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TrainedNaNs_LowLR\validation_data_for_current_ANN.txt"
-model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TrainedNaNs_LowLR\lightning_logs\version_0\checkpoints\epoch=18509-step=462750.ckpt")
+path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\training_data_for_current_ANN.txt" 
+path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\validation_data_for_current_ANN.txt"
+model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\lightning_logs\version_0\checkpoints\epoch=52772-step=1319325.ckpt")
 model = model.double()
 # model.eval()
 # data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
@@ -526,6 +531,30 @@ target_mujt = val_arr[:,mu_jt_column][~np.isnan(val_arr[:,mu_jt_column])]
 target_gammaV = val_arr[:,gammaV_column][~np.isnan(val_arr[:,gammaV_column])]
 target_cp = val_arr[:,cp_column][~np.isnan(val_arr[:,cp_column])]
 
+# predicted_cv = model.calculate_cv(train_inputs).detach().numpy()[~np.isnan(train_arr[:,cv_column])]
+# predicted_z = model.calculate_Z(train_inputs).detach().numpy()[~np.isnan(train_arr[:,Z_column])]
+# predicted_U = model.calculate_U(train_inputs).detach().numpy()[~np.isnan(train_arr[:,internal_energy_column])]
+# predicted_P = model.calculate_P(train_inputs).detach().numpy()[~np.isnan(train_arr[:,pressure_column])]
+# predicted_alphaP = model.calculate_alphaP(train_inputs).detach().numpy()[~np.isnan(train_arr[:,alphaP_column])]
+# predicted_betaT = model.calculate_betaT(train_inputs).detach().numpy()[~np.isnan(train_arr[:,betaT_column])]
+# predicted_mujt = model.calculate_mu_jt(train_inputs).detach().numpy()[~np.isnan(train_arr[:,mu_jt_column])]
+# predicted_gammaV = model.calculate_gammaV(train_inputs).detach().numpy()[~np.isnan(train_arr[:,gammaV_column])]
+# predicted_cp = model.calculate_cp(train_inputs).detach().numpy()[~np.isnan(train_arr[:,cp_column])]
+# predicted_adiabatic_index = model.calculate_adiabatic_index(train_inputs).detach().numpy()
+# target_Z = train_arr[:,Z_column][~np.isnan(train_arr[:,Z_column])]
+# target_cv = train_arr[:,cv_column][~np.isnan(train_arr[:,cv_column])]
+# target_U = train_arr[:,internal_energy_column][~np.isnan(train_arr[:,internal_energy_column])]
+# target_P = train_arr[:,pressure_column][~np.isnan(train_arr[:,pressure_column])]
+# target_alphaP = train_arr[:,alphaP_column][~np.isnan(train_arr[:,alphaP_column])]
+# target_betaT = train_arr[:,betaT_column][~np.isnan(train_arr[:,betaT_column])]
+# target_mujt = train_arr[:,mu_jt_column][~np.isnan(train_arr[:,mu_jt_column])]
+# target_gammaV = train_arr[:,gammaV_column][~np.isnan(train_arr[:,gammaV_column])]
+# target_cp = train_arr[:,cp_column][~np.isnan(train_arr[:,cp_column])]
+
+
+# error = ((predicted_cv-target_cv)/target_cv)**2
+# sns.scatterplot(x = train_arr[:,density_column][~np.isnan(train_arr[:,cv_column])], y = train_arr[:,temperature_column][~np.isnan(train_arr[:,cv_column])],hue=error,hue_norm=(0,0.1))
+# plt.show()
 # def zeno_curve(density,temperature):
 #     density.requires_grad=True
 #     temperature.requires_grad = True
@@ -683,8 +712,13 @@ target_cp = val_arr[:,cp_column][~np.isnan(val_arr[:,cp_column])]
 # plt.ylim(-100,0)
 # plt.show()
 
+sns.set_style('ticks')
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = 'Palatino Linotype'
+plt.rcParams["mathtext.default"] = 'it'
+plt.rcParams["mathtext.fontset"] = 'dejavuserif'
 
-sns.set_style("ticks")
+
 fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
 
 sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
@@ -711,13 +745,13 @@ axs[0, 3].set_ylabel('Target_cv')
 axs[0, 3].set_title('cv_parity')
 sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
 
-sns.scatterplot(x=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*predicted_betaT.flatten(),y=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*target_betaT.flatten(), ax = axs[1, 0])
-sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
-axs[1, 0].set_xlabel('Predicted_Rho*betaT')
-axs[1, 0].set_ylabel('Target_Rho*betaT')
-axs[1, 0].set_title('Rho*betaT_parity')
-# axs[1, 0].set_xlim(0,20)
-# axs[1, 0].set_ylim(0,20)
+# sns.scatterplot(x=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*predicted_betaT.flatten(),y=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*target_betaT.flatten(), ax = axs[1, 0])
+# sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
+# axs[1, 0].set_xlabel('Predicted_Rho*betaT')
+# axs[1, 0].set_ylabel('Target_Rho*betaT')
+# axs[1, 0].set_title('Rho*betaT_parity')
+# # axs[1, 0].set_xlim(0,20)
+# # axs[1, 0].set_ylim(0,20)
 
 sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
 axs[0, 4].set_xlabel('predicted_Cp')
@@ -763,37 +797,43 @@ sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
 #     return P
 
 
-# ##########
-# # Isotherm
-# ##########
-# def find_closest(array, value, n=100):
-#     array = np.asarray(array)
-#     idx = np.argsort(np.abs(array - value))[:n]
-#     return idx
-# temperature = 0.4927
-# index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],temperature,50)
+##########
+# Isotherm
+##########
+crit_isotherm_array = [0.511,0.522]
+isotherm_figure, isotherm_plots = plt.subplots()
+for temperature in crit_isotherm_array:
 
-# isotherm = train_arr[index_of_points_close_to_temp,:]
+    def find_closest(array, value, n=100):
+        array = np.asarray(array)
+        idx = np.argsort(np.abs(array - value))[:n]
+        return idx
+    
+    index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],temperature,100)
+    upper_limit = temperature+0.005
+    lower_limit = temperature-0.005
+    mask = (train_arr[index_of_points_close_to_temp,temperature_column]<upper_limit)&(lower_limit<train_arr[index_of_points_close_to_temp,temperature_column])
+    isotherm = train_arr[index_of_points_close_to_temp,:][mask]
+ 
+    P_isotherm_MD = isotherm[:,pressure_column]
+    density_MD = isotherm[:,density_column]
 
-# P_isotherm_MD = isotherm[:,pressure_column]
-# density_MD = isotherm[:,density_column]
 
+    # Create a numpy array with values from 0 to 1
+    density = torch.linspace(0,0.8, 1000)
 
-# # Create a numpy array with values from 0 to 1
-# density = torch.linspace(0,0.8, 1000)
+    # Create a numpy array with a constant value
+    temperature = torch.full((1000,), temperature)
 
-# # Create a numpy array with a constant value
-# temperature = torch.full((1000,), temperature)
-
-# # Concatenate the two numpy arrays horizontally
-# tensor = torch.stack((density, temperature), dim=1).double()
-# tensor.requires_grad=True
-# P_isotherm = model.calculate_P(tensor)
-# sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label="ANN")
-# sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),label = "MD" )
-# plt.xlabel('Density')
-# plt.ylabel('Reduced Pressure')
-# plt.show()
+    # Concatenate the two numpy arrays horizontally
+    tensor = torch.stack((density, temperature), dim=1).double()
+    tensor.requires_grad=True
+    P_isotherm = model.calculate_P(tensor)
+    sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label="ANN")
+    sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),label = "MD")
+isotherm_plots.set_ylabel(r'$\mathit{P^*}$', style='italic')
+isotherm_plots.set_xlabel(r"$\rho^*$",style="italic")
+plt.show()
 
 ###################
 # Helmholtz surface
@@ -821,6 +861,10 @@ from mpl_toolkits.mplot3d import Axes3D
 
 # plt.show()
 
+
+# Adapted from:
+#  https://github.com/gustavochm/fe-ann-eos-mie/blob/main/examples/2.%20Computing%20fluid%20phase%20equilibria%20with%20the%20FE-ANN%20EoS.ipynb
+#  Gustavo Chaparro,2023
 def fobj_crit(input, model):
     rhoad, Tad = np.split(np.asarray(input), 2)
     input = torch.tensor([input])
@@ -840,6 +884,7 @@ rhoc0 = 0.4
 # solving fobj_crit
 sol_crit = root(fobj_crit, x0=[rhoc0, Tc0], args=(model),tol = 1e-80)
 rhoc_model, Tc_model = sol_crit.x
+print(sol_crit.x)
 # computing critical pressure
 # Pc_model = model.calculate_P(torch.tensor([rhoc_model,Tc_model]))
 # print(Pc_model)
@@ -936,16 +981,9 @@ vle_temperatures = np.concatenate([vle_gas_tem,vle_liq_tem])
 liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
 gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
 semi_final_fig, plots = plt.subplots()
-# plots.plot(gas_density_range,vapour_curve(gas_density_range,*vapour_curve_parameters),'b')
-# plots.plot(liquid_density_range,liquid_curve(liquid_density_range,*liquid_curve_parameters),'b')
-# plots.plot(solid_density_range,solid_curve(solid_density_range,*solid_curve_parameters),'b')
 
-# sns.lineplot(x = gas_density_range,y = vapour_curve(gas_density_range,*vapour_curve_parameters),color = '#1f77b4')
-# sns.lineplot(x = liquid_density_range[:-5],y = liquid_curve(liquid_density_range[:-5],*liquid_curve_parameters),color = '#1f77b4')
-# sns.lineplot(x = solid_density_range[500:-5],y = solid_curve(solid_density_range[500:-5],*solid_curve_parameters),color = '#1f77b4')
 plots.scatter(x = vle_densities,y = vle_temperatures,facecolors='none',edgecolors='r', marker='^')
 plots.scatter(density_f,T_sf,facecolors='none',edgecolors='r', marker='^')
-# plots.scatter(density_triple_point,temperature_triple_point,facecolors='none',edgecolors='g', marker='^')
 plt.title("VLSE curve with datapoints")
 plt.xlabel("Reduced Density")
 plt.ylabel("Reduced Temperature")
@@ -956,43 +994,8 @@ plots.plot(rhol, T, color='k')
 plots.plot(rhoc_model, Tc_model, '*',color='k')
 plots.set_xlim([0, 1.0])
 plots.set_ylim([0.1, 0.6])
-plots.set_xlabel(r"$\rho$")
-plots.set_ylabel(r"$T$")
+plots.set_xlabel(r'$\mathit{\rho^*}$', style='italic')
+plots.set_ylabel(r"$T^*$",style="italic")
 
 plt.show()
-# Computing saturation pressure
-# pressure_l = model.pressure(alpha_n, rhol, T) + rhol * T
-# pressure_v = model.pressure(alpha_n, rhov, T) +rhov * T
-# Computing vaporisation enthalpy 
-# enthalpy_l =  model.enthalpy(alpha_n, rhol, T)
-# enthalpy_v =  model.enthalpy(alpha_n, rhov, T)
-# hvap = enthalpy_v - enthalpy_l
-################
-# Phase Envelope
-################
-# num_points = 1000000
-# density = torch.linspace(0,1,num_points)
-# temperature = torch.full((num_points,), 0.5115)
 
-# input_tensor = torch.stack((density, temperature), dim=1).double()
-# input_tensor.requires_grad=True
-# print(input_tensor)
-# chemical_potential = model.calculate_mu(input_tensor)
-# pressure = model.calculate_P(input_tensor)
-
-
-
-# diff_chemcial_potential = torch.abs(chemical_potential[:len(chemical_potential)//2] - torch.flip(chemical_potential[len(chemical_potential)//2:],dims=(0,)))
-
-# for value in diff_chemcial_potential[diff_chemcial_potential<1e-2].flatten():
-#     mask = diff_chemcial_potential == value
-#     index_diff_zero = mask.nonzero().flatten()
-
-#     if (torch.abs(pressure[index_diff_zero]-pressure[-index_diff_zero-1])<1e-3):
-#         if pressure[index_diff_zero]>0:
-#             print("success")
-#             print((pressure[index_diff_zero],pressure[-index_diff_zero-1]))
-#             print((chemical_potential[index_diff_zero],chemical_potential[-index_diff_zero-1]))
-#             print(density[index_diff_zero],density[-index_diff_zero-1])
-
-# plt.show()
