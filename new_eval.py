@@ -27,11 +27,12 @@ class BasicLightning(pl.LightningModule):
     """
     This Neural Network takes the input of density and temperature and predicts the helmholtz free energy.
     """
-    def __init__(self):
+    def __init__(self,config):
         super(BasicLightning,self).__init__() 
-        self.lr = 1e-6
+        self.lr = config["lr"]
         self.batch_size = 6000
-        self.layer_size = 45
+        self.layer_size = config["layer_size"]
+        self.weight_decay_coefficient = config["weight_decay_coefficient"]
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -59,13 +60,16 @@ class BasicLightning(pl.LightningModule):
         '''
         Configures optimiser
         '''
-        optimiser = torch.optim.Adam(self.parameters(),lr = self.lr)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
-        output_dict = {
-        "optimizer": optimiser,
-        "lr_scheduler": {"scheduler":scheduler}
-        }
-        return output_dict
+        optimiser = torch.optim.AdamW(self.parameters(),lr = self.lr)
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimiser,500)
+
+
+        # output_dict = {
+        # "optimizer": optimiser,
+        # "lr_scheduler": {"scheduler":scheduler}
+        # }
+        return optimiser
+
     
     def training_step(self,train_batch,batch_index):
         '''
@@ -78,6 +82,7 @@ class BasicLightning(pl.LightningModule):
         train_input_i, train_target_i = train_batch
         rho = train_input_i[:,0]
         T = train_input_i[:,1]
+
         cv_target = train_target_i[:,0]
         gammaV_target = train_target_i[:,1]
         cp_target = train_target_i[:,2]
@@ -87,7 +92,11 @@ class BasicLightning(pl.LightningModule):
         P_target = train_target_i[:,6]
         mu_jt_target = train_target_i[:,7]
         Z_target = train_target_i[:,8]
+
+        # cp_target = cv_target + (T/rho)*((alphaP_target**2)/betaT_target)
+        # mu_jt_target = (1/(rho*cp_target))*((T*alphaP_target)-1)
         adiabatic_index_target = cp_target/cv_target
+
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
         var_U = self.calculate_variance(U_target)
@@ -96,15 +105,20 @@ class BasicLightning(pl.LightningModule):
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
+        var_P = self.calculate_variance(P_target)
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         train_input_i.requires_grad = True
 
         # Pass input through NN to get the output
-        A = self.forward(train_input_i)
+        zero_densities = torch.zeros_like(rho)
+        input_at_zero_densities = torch.stack((zero_densities,T),dim=-1)
+
+        #A is the residual helmholtz free energy
+        A = self.forward(train_input_i)-self.forward(input_at_zero_densities)
 
         # Computes gradient and hessian
-        train_gradient = self.compute_gradient(train_input_i)
+        train_gradient = self.compute_gradient(train_input_i,input_at_zero_densities)
         train_hessian = self.compute_hessian(train_input_i)
 
         dA_drho = train_gradient[:,0]
@@ -134,36 +148,133 @@ class BasicLightning(pl.LightningModule):
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
         d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
-        # print(T,rho,A,dA_dT,dA_drho,d2A_drho2,d2A_dT2,d2A_drho2,d2A_dT_drho)
+
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
+
         U_predicted = A+(T*S)
-        Z = (rho*dA_drho)/T
+        U_predicted += (2/2)*T  # Adding ideal gas contribution
+
+        P_by_rho = rho*dA_drho
+        P_by_rho += T # Adding ideal gas contribution
+
+        Z_predicted= (P_by_rho)/T
+
         cv_predicted = -T*d2A_dT2
+        cv_predicted += (2/2) # Adding ideal gas contribution
+
         dP_dT = (rho**2)*d2A_dT_drho
+        dP_dT += rho    # Adding ideal gas contribution
+
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        dP_drho += T    # Adding ideal gas contribution
+
         alphaP_predicted = (dP_dT)/(rho*dP_drho)
-        rho_betaT_predicted = 1/dP_drho
-        betaT_predicted = torch.reciprocal(rho*dP_drho)
+
+
+        rho_betaT = torch.reciprocal(dP_drho)
+        betaT_predicted = torch.divide(rho_betaT,rho)
+
         gammaV_predicted = alphaP_predicted/betaT_predicted
-        cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
+
+        cp_aux1 = T*(alphaP_predicted**2)
+        cp_aux2 = rho*betaT_predicted
+        cp_predicted = cv_predicted+(cp_aux1/cp_aux2)
+        
         mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
-        Z_predicted = P_predicted/(rho*T)
+        
+        # Z_predicted = P_predicted/(rho*T)
+
         adiabatic_index_predicted = cp_predicted/cv_predicted
 
-        
         # Calculates the loss
 
-        loss = A*torch.zeros_like(A) \
-            + ((Z_target-Z_predicted)**2)/var_Z + ((U_target-U_predicted)**2)/var_U \
-            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
-        
-        mean_train_loss = torch.mean(loss)
+        cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
 
-        self.log("train_loss",mean_train_loss,sync_dist=True)
-        return {"loss": mean_train_loss}
+        # Don't perform the loss calculations for any of the properties where the values were deemed non converged from the data collation script
+        non_nan_alphaP_index = ~torch.isnan(alphaP_target)
+        non_nan_Z_index = ~torch.isnan(Z_target)        
+        non_nan_U_index = ~torch.isnan(U_target)
+        non_nan_adiabatic_index_index = ~torch.isnan(adiabatic_index_target)
+        non_nan_gammaV_index = ~torch.isnan(gammaV_target)
+        non_nan_cv_index = ~torch.isnan(cv_target)        
+        non_nan_betaT_index = ~torch.isnan(rho*betaT_target)
+        non_nan_mu_jt_index = ~torch.isnan(mu_jt_target )
+
+        # If a property was deemed non converged in the collation script it was set to Nan, this indexes all of the properties where they arent Nan's.
+        # This means that we can still use the properties that were converged in a given simulation and disregard the non converged properties
+
+        alphaP_target = alphaP_target[non_nan_alphaP_index]
+        alphaP_predicted = alphaP_predicted[non_nan_alphaP_index]
+
+        Z_target = Z_target[non_nan_Z_index]
+        Z_predicted = Z_predicted[non_nan_Z_index]
+
+        U_target = U_target[non_nan_U_index]
+        U_predicted = U_predicted[non_nan_U_index]
+        
+        adiabatic_index_target = adiabatic_index_target[non_nan_adiabatic_index_index]
+        adiabatic_index_predicted = adiabatic_index_predicted[non_nan_adiabatic_index_index]
+
+        gammaV_target = gammaV_target[non_nan_gammaV_index]
+        gammaV_predicted = gammaV_predicted[non_nan_gammaV_index]
+
+        cv_target = cv_target[non_nan_cv_index]
+        cv_predicted = cv_predicted[non_nan_cv_index]
+
+        betaT_target = betaT_target[non_nan_betaT_index]
+        betaT_predicted = betaT_predicted[non_nan_betaT_index]
+
+        mu_jt_target = mu_jt_target[non_nan_mu_jt_index]
+        mu_jt_predicted = mu_jt_predicted[non_nan_mu_jt_index]
+
+
+        Z_loss = ((Z_target-Z_predicted)**2)/var_Z
+        U_loss = ((U_target-U_predicted)**2)/var_U
+        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
+        adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
+        gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
+        cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
+        rho_betaT_loss = 1/20*((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2)/var_rho_betaT
+        mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+
+        Z_loss = torch.mean(Z_loss)
+        U_loss = torch.mean(U_loss)
+        alphaP_loss = torch.mean(alphaP_loss)
+        adiabatic_index_loss = torch.mean(adiabatic_index_loss)
+        gammmaV_loss = torch.mean(gammmaV_loss)
+        cv_loss = torch.mean(cv_loss)
+        rho_betaT_loss = torch.mean(rho_betaT_loss)
+        mu_jt_loss = torch.mean(mu_jt_loss)
+
+
+
+        # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
+        # this just fudges the output to 0 so that it doesn't error.
+
+        A_loss_required_for_DDP = A*torch.zeros_like(A)
+        A_loss_required_for_DDP = torch.mean(A_loss_required_for_DDP)
+
+        
+
+        # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A_loss_required_for_DDP
+
+
+
+
+        self.log("train_P_loss",torch.mean((P_predicted-P_target)**2)) 
+        self.log("train_cv_loss",torch.mean(((cv_target-cv_predicted)**2)))
+        self.log("train_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2))
+        self.log("train_rhoBetaT_loss",torch.mean((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2))
+        self.log("train_alphaP_loss",torch.mean((alphaP_target-alphaP_predicted)**2))
+        self.log("train_mu_jt_loss",torch.mean((mu_jt_predicted-mu_jt_target)**2))
+        self.log("train_cp_predicted",torch.mean((cp_predicted-cp_target)**2))
+        self.log("train_adiabatic_index_loss",torch.mean((adiabatic_index_target-adiabatic_index_predicted)**2))
+        self.log("train_U_loss",torch.mean((U_target-U_predicted)**2))
+        self.log("train_Z_loss",torch.mean((Z_predicted-Z_target)**2))  
+        self.log("train_loss",loss)
+        return {"loss": loss}
     
     def validation_step(self, val_batch, batch_idx):
 
@@ -180,8 +291,10 @@ class BasicLightning(pl.LightningModule):
         P_target = val_target_i[:,6]
         mu_jt_target = val_target_i[:,7]
         Z_target = val_target_i[:,8]
-        adiabatic_index_target = cp_target/cv_target
 
+
+        rho_betaT_target = rho*betaT_target
+        adiabatic_index_target = cp_target/cv_target
 
         var_cv = self.calculate_variance(cv_target)
         var_Z = self.calculate_variance(Z_target)
@@ -191,15 +304,21 @@ class BasicLightning(pl.LightningModule):
         var_alphaP = self.calculate_variance(alphaP_target)
         var_adiabatic_index = self.calculate_variance(adiabatic_index_target)
         var_mu_jt = self.calculate_variance(mu_jt_target)
+        var_P = self.calculate_variance(P_target)
 
         # Ensures that the DAG is created for the input so that the gradient and hessian can be computed 
         val_input_i.requires_grad = True
 
         # Pass input through NN to get the output
-        A = self.forward(val_input_i)
+        zero_densities = torch.zeros_like(rho)
+
+        input_at_zero_densities = torch.stack((zero_densities,T),dim=-1)
+
+        # A is the residual helmholtz free energy
+        A = self.forward(val_input_i)-self.forward(input_at_zero_densities)
 
         # Computes gradient and hessian
-        val_gradient = self.compute_gradient(val_input_i)
+        val_gradient = self.compute_gradient(val_input_i,input_at_zero_densities)
         val_hessian = self.compute_hessian(val_input_i)
 
         dA_drho = val_gradient[:,0]
@@ -225,45 +344,126 @@ class BasicLightning(pl.LightningModule):
         rho = torch.reshape(rho,(-1,))
         A = torch.reshape(A,(-1,))
         dA_dT = torch.reshape(dA_dT,(-1,))
-        
         dA_drho = torch.reshape(dA_drho,(-1,))
-
-
         d2A_dT2 = torch.reshape(d2A_dT2,(-1,))
-
         d2A_drho2 = torch.reshape(d2A_drho2,(-1,))
         d2A_dT_drho = torch.reshape(d2A_dT_drho,(-1,))
 
         S = -dA_dT
         P_predicted = (rho**2)*dA_drho
+
         U_predicted = A+(T*S)
-        Z = (rho*dA_drho)/T
+        U_predicted += (2/2)*T  # Adding ideal gas contribution
+
+        P_by_rho = rho*dA_drho
+        P_by_rho += T # Adding ideal gas contribution
+
+        Z_predicted= (P_by_rho)/T
+
         cv_predicted = -T*d2A_dT2
+        cv_predicted += (2/2) # Adding ideal gas contribution
+
         dP_dT = (rho**2)*d2A_dT_drho
+        dP_dT += rho    # Adding ideal gas contribution
+
         dP_drho = 2*rho*dA_drho + (rho**2)*d2A_drho2
+        dP_drho += T    # Adding ideal gas contribution
+
         alphaP_predicted = (dP_dT)/(rho*dP_drho)
-        rho_betaT_predicted = 1/dP_drho
-        betaT_predicted = torch.reciprocal(rho*dP_drho)
+
+
+        rho_betaT = torch.reciprocal(dP_drho)
+        betaT_predicted = torch.divide(rho_betaT,rho)
+
         gammaV_predicted = alphaP_predicted/betaT_predicted
-        cp_predicted = cv_predicted + (T/rho)*((alphaP_predicted**2)/betaT_predicted)
-        mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
-        Z_predicted = P_predicted/(rho*T)
-        adiabatic_index_predicted = cp_predicted/cv_predicted
-        # Calculates the loss
-        loss = A*torch.zeros_like(A) \
-            + ((Z_target-Z_predicted)**2)/var_Z \
-            + ((U_target-U_predicted)**2)/var_U \
-            + 1/10*((cv_target-cv_predicted)**2)/var_cv \
-            + 1/10*((gammaV_target-gammaV_predicted)**2)/var_gammaV \
-            + 1/10*((alphaP_target-alphaP_predicted)**2)/var_alphaP \
+
+        cp_aux1 = T*(alphaP_predicted**2)
+        cp_aux2 = rho*betaT_predicted
+        cp_predicted = cv_predicted+(cp_aux1/cp_aux2)
         
-        mean_val_loss = torch.mean(loss)
-        self.log("val_P_loss",torch.mean((P_predicted-P_target)**2),sync_dist=True) 
-        self.log("val_cv_loss",torch.mean(((cv_target-cv_predicted)**2)),sync_dist=True)
-        self.log("val_gammaV_loss",torch.mean((gammaV_target-gammaV_predicted)**2),sync_dist=True)
-        self.log("val_U_loss",torch.mean((U_target-U_predicted)**2),sync_dist=True)  
-        self.log("val_loss",mean_val_loss,sync_dist=True) 
-        return {"val_loss": mean_val_loss}
+        mu_jt_predicted = (1/(rho*cp_predicted))*((T*alphaP_predicted)-1)
+        
+        # Z_predicted = P_predicted/(rho*T)
+
+        adiabatic_index_predicted = cp_predicted/cv_predicted
+
+        # Calculates the loss
+
+        cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
+
+        # Don't perform the loss calculations for any of the properties where the values were deemed non converged from the data collation script
+        non_nan_alphaP_index = ~torch.isnan(alphaP_target)
+        non_nan_Z_index = ~torch.isnan(Z_target)        
+        non_nan_U_index = ~torch.isnan(U_target)
+        non_nan_adiabatic_index_index = ~torch.isnan(adiabatic_index_target)
+        non_nan_gammaV_index = ~torch.isnan(gammaV_target)
+        non_nan_cv_index = ~torch.isnan(cv_target)        
+        non_nan_betaT_index = ~torch.isnan(rho*betaT_target)
+        non_nan_mu_jt_index = ~torch.isnan(mu_jt_target )
+
+        # If a property was deemed non converged in the collation script it was set to Nan, this indexes all of the properties where they arent Nan's.
+        # This means that we can still use the properties that were converged in a given simulation and disregard the non converged properties
+
+        alphaP_target = alphaP_target[non_nan_alphaP_index]
+        alphaP_predicted = alphaP_predicted[non_nan_alphaP_index]
+
+        Z_target = Z_target[non_nan_Z_index]
+        Z_predicted = Z_predicted[non_nan_Z_index]
+
+        U_target = U_target[non_nan_U_index]
+        U_predicted = U_predicted[non_nan_U_index]
+        
+        adiabatic_index_target = adiabatic_index_target[non_nan_adiabatic_index_index]
+        adiabatic_index_predicted = adiabatic_index_predicted[non_nan_adiabatic_index_index]
+
+        gammaV_target = gammaV_target[non_nan_gammaV_index]
+        gammaV_predicted = gammaV_predicted[non_nan_gammaV_index]
+
+        cv_target = cv_target[non_nan_cv_index]
+        cv_predicted = cv_predicted[non_nan_cv_index]
+
+        betaT_target = betaT_target[non_nan_betaT_index]
+        betaT_predicted = betaT_predicted[non_nan_betaT_index]
+
+        mu_jt_target = mu_jt_target[non_nan_mu_jt_index]
+        mu_jt_predicted = mu_jt_predicted[non_nan_mu_jt_index]
+
+        Z_loss = ((Z_target-Z_predicted)**2)/var_Z
+        U_loss = ((U_target-U_predicted)**2)/var_U
+        alphaP_loss = 1/20*((alphaP_target-alphaP_predicted)**2)/var_alphaP
+        adiabatic_index_loss = 1/20*((adiabatic_index_target-adiabatic_index_predicted)**2)/var_adiabatic_index
+        gammmaV_loss = 1/20*((gammaV_target-gammaV_predicted)**2)/var_gammaV
+        cv_loss = 1/20*((cv_target-cv_predicted)**2)/var_cv
+        rho_betaT_loss = 1/20*((rho[non_nan_betaT_index]*betaT_target-rho[non_nan_betaT_index]*betaT_predicted)**2)/var_rho_betaT
+        mu_jt_loss = 1/20*((mu_jt_target-mu_jt_predicted)**2)/var_mu_jt
+        Z_loss = torch.mean(Z_loss)
+        U_loss = torch.mean(U_loss)
+        alphaP_loss = torch.mean(alphaP_loss)
+        adiabatic_index_loss = torch.mean(adiabatic_index_loss)
+        gammmaV_loss = torch.mean(gammmaV_loss)
+        cv_loss = torch.mean(cv_loss)
+        rho_betaT_loss = torch.mean(rho_betaT_loss)
+        mu_jt_loss = torch.mean(mu_jt_loss)
+
+
+
+        # DDP training strategy requires that the output of the forward pass of the ANN be in the loss function, 
+        # this just fudges the output to 0 so that it doesn't error.
+
+        A_loss_required_for_DDP = A*torch.zeros_like(A)
+        A_loss_required_for_DDP = torch.mean(A_loss_required_for_DDP)
+
+        
+
+        # loss = Z_loss+U_loss+cv_loss+gammmaV_loss+adiabatic_index_loss+alphaP_loss+A*torch.zeros_like(A)
+        loss = Z_loss+U_loss+cv_loss+alphaP_loss+gammmaV_loss+rho_betaT_loss+adiabatic_index_loss+mu_jt_loss+A_loss_required_for_DDP
+
+
+
+
+
+        self.log("val_loss",loss) 
+        return {"val_loss": loss}
     
     def backward(self, loss):
 
@@ -280,23 +480,29 @@ class BasicLightning(pl.LightningModule):
         super().on_validation_model_eval(*args, **kwargs)
         torch.set_grad_enabled(True)
 
-    def compute_gradient(self,inputs):
+    def compute_gradient(self,inputs,input_at_zero_densities):
         # Compute the gradient of the output of the forward pass wrt the input, grad_outputs is d(forward)/d(forward) which is 1 , See https://pytorch.org/tutorials/beginner/blitz/autograd_tutorial.html
-        gradient = torch.autograd.grad(self.forward(inputs),
+        gradient = torch.autograd.grad(self.forward(inputs)-self.forward(input_at_zero_densities),
                                        inputs,
-                                       grad_outputs=torch.ones_like(self.forward(inputs)),
+                                       grad_outputs=torch.ones_like(self.forward(inputs)-self.forward(input_at_zero_densities)),
                                        retain_graph=True,
                                        create_graph=True
                                        )[0]
         return gradient
+    def compute_residual_helmholtz_for_hessian(self,x):
+        rho = x[0]
+        T = x[1]
+        zero_densities = torch.zeros_like(rho)
+        input_at_zero_densities = torch.stack((zero_densities,T),dim=-1)
+        return self.forward(x)-self.forward(input_at_zero_densities)
     
-    def compute_hessian(self, x):
-        
-        # Compute the hessian of the output wrt the input
-        hessians = torch.vmap(torch.func.hessian(self.forward), (0))(x)
+    def compute_hessian(self,input):
+        # Compute the hessian of the output wrt the input   
+        hessians = torch.vmap(torch.func.hessian(self.compute_residual_helmholtz_for_hessian), (0))(input)
         return hessians
     
     def calculate_variance(self, Tensor_to_calculate_variance):
+        Tensor_to_calculate_variance = Tensor_to_calculate_variance[~torch.isnan(Tensor_to_calculate_variance)]
         variance = torch.var(torch.reshape(Tensor_to_calculate_variance,(-1,)))
         return variance
     
@@ -467,9 +673,9 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\training_data_for_current_ANN.txt" 
-path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\validation_data_for_current_ANN.txt"
-model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\lightning_logs\version_0\checkpoints\epoch=52772-step=1319325.ckpt")
+path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TorchTrainer_2023-12-03_17-26-20\training_data_for_current_ANN.txt"
+path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TorchTrainer_2023-12-03_17-26-20\validation_data_for_current_ANN.txt"
+model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TorchTrainer_2023-12-03_17-26-20\lightning_logs\version_0\checkpoints\epoch=36344-step=908625.ckpt")
 model = model.double()
 # model.eval()
 # data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
@@ -531,192 +737,30 @@ target_mujt = val_arr[:,mu_jt_column][~np.isnan(val_arr[:,mu_jt_column])]
 target_gammaV = val_arr[:,gammaV_column][~np.isnan(val_arr[:,gammaV_column])]
 target_cp = val_arr[:,cp_column][~np.isnan(val_arr[:,cp_column])]
 
-# predicted_cv = model.calculate_cv(train_inputs).detach().numpy()[~np.isnan(train_arr[:,cv_column])]
-# predicted_z = model.calculate_Z(train_inputs).detach().numpy()[~np.isnan(train_arr[:,Z_column])]
-# predicted_U = model.calculate_U(train_inputs).detach().numpy()[~np.isnan(train_arr[:,internal_energy_column])]
-# predicted_P = model.calculate_P(train_inputs).detach().numpy()[~np.isnan(train_arr[:,pressure_column])]
-# predicted_alphaP = model.calculate_alphaP(train_inputs).detach().numpy()[~np.isnan(train_arr[:,alphaP_column])]
-# predicted_betaT = model.calculate_betaT(train_inputs).detach().numpy()[~np.isnan(train_arr[:,betaT_column])]
-# predicted_mujt = model.calculate_mu_jt(train_inputs).detach().numpy()[~np.isnan(train_arr[:,mu_jt_column])]
-# predicted_gammaV = model.calculate_gammaV(train_inputs).detach().numpy()[~np.isnan(train_arr[:,gammaV_column])]
-# predicted_cp = model.calculate_cp(train_inputs).detach().numpy()[~np.isnan(train_arr[:,cp_column])]
-# predicted_adiabatic_index = model.calculate_adiabatic_index(train_inputs).detach().numpy()
-# target_Z = train_arr[:,Z_column][~np.isnan(train_arr[:,Z_column])]
-# target_cv = train_arr[:,cv_column][~np.isnan(train_arr[:,cv_column])]
-# target_U = train_arr[:,internal_energy_column][~np.isnan(train_arr[:,internal_energy_column])]
-# target_P = train_arr[:,pressure_column][~np.isnan(train_arr[:,pressure_column])]
-# target_alphaP = train_arr[:,alphaP_column][~np.isnan(train_arr[:,alphaP_column])]
-# target_betaT = train_arr[:,betaT_column][~np.isnan(train_arr[:,betaT_column])]
-# target_mujt = train_arr[:,mu_jt_column][~np.isnan(train_arr[:,mu_jt_column])]
-# target_gammaV = train_arr[:,gammaV_column][~np.isnan(train_arr[:,gammaV_column])]
-# target_cp = train_arr[:,cp_column][~np.isnan(train_arr[:,cp_column])]
-
-
-# error = ((predicted_cv-target_cv)/target_cv)**2
-# sns.scatterplot(x = train_arr[:,density_column][~np.isnan(train_arr[:,cv_column])], y = train_arr[:,temperature_column][~np.isnan(train_arr[:,cv_column])],hue=error,hue_norm=(0,0.1))
-# plt.show()
-# def zeno_curve(density,temperature):
-#     density.requires_grad=True
-#     temperature.requires_grad = True
-#     zero_densities = torch.zeros_like(density)
-#     zero_densities.requires_grad = True
-#     ideal_input = torch.stack((zero_densities,temperature),dim=-1)
-#     ideal_input = ideal_input.double()
-#     A_ideal = model.forward(ideal_input)
-#     A_ideal = A_ideal/temperature
-#     dAideal_drho = torch.autograd.grad(A_ideal,zero_densities,grad_outputs=torch.ones_like(A_ideal),create_graph=True)[0]
-#     A_zeno = density*dAideal_drho
-#     dA_zeno_drho = torch.autograd.grad(A_zeno,density,grad_outputs=torch.ones_like(A_zeno),create_graph=True)[0]
-#     P_by_rho = density*dA_zeno_drho
-#     P = P_by_rho*density
-#     return P
-
-# r = torch.tensor([0.3,0.5])
-# T = torch.tensor([1.0,2.0])
-# zeno_curve(r,T)
-
-
-# def amagat_curve(T):
-#     def find_dZ_dT(rho,T):
-#         temperature = torch.tensor([T])
-#         temperature = temperature.double()
-#         temperature.requires_grad = True
-#         rho = torch.tensor(rho)
-#         rho = rho.double()
-#         input_at_constant_density = torch.stack((rho,temperature),dim=-1)
-#         input_at_constant_density = input_at_constant_density.double()
-#         model.calculate_Z(input_at_constant_density)
-#         dZ_dT= torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,0].detach().numpy()
-#         return dZ_dT.item()
-
-#     rho_at_dZ_dT_is__zero_for_T = scipy.optimize.root(find_dZ_dT,args=(T),x0=0.5).x
-
-#     T = torch.tensor([T])
-#     T = T.double()
-#     T.requires_grad = True
-#     rho_at_dZ_dT_is__zero_for_T = torch.tensor(rho_at_dZ_dT_is__zero_for_T)
-#     rho_at_dZ_dT_is__zero_for_T.requires_grad = True
-#     input_at_dZ_dT_is_zero= torch.stack((rho_at_dZ_dT_is__zero_for_T,T),dim=-1)
-#     pressure = model.calculate_P(input_at_dZ_dT_is_zero)
-#     return pressure.detach().numpy(),rho_at_dZ_dT_is__zero_for_T
-
-
-
-# number_of_points_to_evaluate = 100
-# amagat_pressure_list = []
-# amagat_density_list = []
-# amagat_temperature_range = np.linspace(0.01,1.5,number_of_points_to_evaluate)
-# for temperature in amagat_temperature_range:
-#     pressure, density =amagat_curve(temperature)
-#     amagat_pressure_list.append(pressure)
-#     amagat_density_list.append(density)
-# sns.scatterplot(x=amagat_temperature_range.flatten(),y = np.array(amagat_pressure_list).flatten())
-# plt.xlim(0.4,1.5)
-# plt.ylim(0,0.21)
-# # plt.show()
-
-# zeno_density_ranage = torch.tensor(amagat_density_list)
-# zeno_temperature_range = torch.linspace(0.1,1.5,number_of_points_to_evaluate)
-# zeno_inputs = torch.stack((zeno_density_ranage,zeno_temperature_range),dim=-1)
-# zeno_inputs = zeno_inputs.double()
-# zeno_inputs.requires_grad = True
-# zeno_pressure = model.calculate_P(zeno_inputs)
-# sns.scatterplot(x=zeno_temperature_range.detach().numpy().flatten(),y = zeno_pressure.detach().numpy().flatten())
-# plt.xlim(0.4,1.5)
-# plt.ylim(0,0.21)
-# plt.show()
-
-
-# sns.scatterplot(y = torch.autograd.grad(model.calculate_Z(input_at_constant_density),input_at_constant_density, grad_outputs=torch.ones_like(model.calculate_Z(input_at_constant_density)), create_graph=True)[0][:,1].detach().numpy(),x = temperature.detach().numpy())
-# plt.show()
-# model.calculate_P()
-# target_adiabatic_index = val_arr[:,cp_column]/val_arr[:,cv_column]
-
-# predicted_cv = model.calculate_cv(train_inputs).detach().numpy()
-# predicted_z = model.calculate_Z(train_inputs).detach().numpy()
-# predicted_U = model.calculate_U(train_inputs).detach().numpy()
-# predicted_P = model.calculate_P(train_inputs).detach().numpy()
-# predicted_alphaP = model.calculate_alphaP(train_inputs).detach().numpy()
-# predicted_betaT = model.calculate_betaT(train_inputs).detach().numpy()
-# predicted_mujt = model.calculate_mu_jt(train_inputs).detach().numpy()
-# predicted_gammaV = model.calculate_gammaV(train_inputs).detach().numpy()
-# predicted_cp = model.calculate_cp(train_inputs).detach().numpy()
-# predicted_adiabatic_index = model.calculate_adiabatic_index(train_inputs).detach().numpy()
-# target_Z = train_arr[:,Z_column]
-# target_cv = train_arr[:,cv_column]
-# target_U = train_arr[:,internal_energy_column]
-# target_P = train_arr[:,pressure_column]
-# target_alphaP = train_arr[:,alphaP_column]
-# target_betaT = train_arr[:,betaT_column]
-# target_mujt = train_arr[:,mu_jt_column]
-# target_gammaV = train_arr[:,gammaV_column]
-# target_cp = train_arr[:,cp_column]
-# target_adiabatic_index = train_arr[:,cp_column]/train_arr[:,cv_column]
-# sns.set_style("ticks")
-# sns.lineplot(x =[0,8],y=[0,8])
-# sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten())
-# plt.xlabel('Predicted_Z')
-# plt.ylabel('Target_Z')
-# plt.title('Z_parity')
-# plt.show()
-
-# sns.set_style("ticks")
-# sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten())
-# sns.lineplot(x =[0,14],y=[0,14])
-# plt.xlabel('Predicted_U')
-# plt.ylabel('Target_U')
-# plt.title('U_parity')
-# plt.show()
-
-# sns.set_style("ticks")
-# sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten())
-# sns.lineplot(x =[0,20],y=[0,20])
-# plt.xlabel('Predicted_P')
-# plt.ylabel('Target_P')
-# plt.title('P_parity')
-# plt.show()
-
-# sns.set_style("ticks")
-# sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten())
-# plt.xlabel('Predicted_cv')
-# plt.ylabel('Target_cv')
-# plt.title('cv_parity')
-# sns.lineplot(x =[0,10],y=[0,10])
-# plt.show()
-
-# sns.set_style("ticks")
-# sns.scatterplot(x=val_arr[:,density_column]*predicted_betaT.flatten(),y=val_arr[:,density_column]*target_betaT.flatten())
-# sns.lineplot(x=[0,20],y=[0,20])
-# plt.xlabel('Predicted_Rho*betaT')
-# plt.ylabel('Target_Rho*betaT')
-# plt.title('Rho*betaT_parity')
-# plt.xlim(0,20)
-# plt.ylim(0,20)
-# plt.show()
-
-# sns.set_style("ticks")
-# sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten())
-# plt.xlabel('Predicted_alphaP')
-# plt.ylabel('Target_alphaP')
-# plt.title('alpahP_parity')
-# sns.lineplot(x =[0,10],y=[0,10])
-# plt.show()
-
-# sns.set_style("ticks")
-# sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten())
-# plt.xlabel('Predicted_mujt')
-# plt.ylabel('Target_mujt')
-# plt.title('mujt_parity')
-# sns.lineplot(x =[-100,0],y=[-100,0])
-# plt.xlim(-100,0)
-# plt.ylim(-100,0)
-# plt.show()
-
+error = (predicted_cv-target_cv)**2/target_cv
 sns.set_style('ticks')
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = 'Palatino Linotype'
 plt.rcParams["mathtext.default"] = 'it'
 plt.rcParams["mathtext.fontset"] = 'dejavuserif'
+
+#Error heatplot
+fig, ax = plt.subplots()
+
+scatter = ax.scatter(val_arr[:,density_column][~np.isnan(val_arr[:,cv_column])], val_arr[:,temperature_column][~np.isnan(val_arr[:,cv_column])], c=error, cmap='plasma',vmin=0, vmax=1)
+ax.set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 10)
+ax.set_ylabel(r"$T^*$",style="italic",fontsize = 10)
+ax.set_title('Scatter Plot with Colorbar')
+
+cbar = fig.colorbar(scatter)
+tick_labels = cbar.ax.get_yticklabels()
+tick_labels[-1] = '> 1'
+cbar.ax.set_yticklabels(tick_labels)
+cbar.set_label('MSE')
+
+plt.show()
+
+
 
 
 fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
@@ -785,16 +829,7 @@ sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
 
 # plt.show()
 
-# def zeno_curve(density,temperature):
-#     """
-#     Calculates pressure from density and temperature for zeno curve
 
-#     Z = 1 for Z = P/(Rho*T)
-#     """
-#     rho = density
-#     T = temperature
-#     P = rho*T
-#     return P
 
 
 ##########
@@ -834,32 +869,6 @@ for temperature in crit_isotherm_array:
 isotherm_plots.set_ylabel(r'$\mathit{P^*}$', style='italic')
 isotherm_plots.set_xlabel(r"$\rho^*$",style="italic")
 plt.show()
-
-###################
-# Helmholtz surface
-####################
-import matplotlib.pyplot as plt
-import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-
-# # Generate random data
-# x = val_arr[:,density_column].flatten()
-# y = val_arr[:,temperature_column].flatten()
-# z = model.forward(val_inputs).detach().numpy().flatten()
-
-# # Create a 3D scatter plot
-# ax.scatter(x, y, z, c=z)
-
-# # Set labels and title
-# ax.set_xlabel('Density')
-# ax.set_ylabel('Temperature')
-# ax.set_zlabel('Helmholtz Free Energy')
-# plt.title('Helmholtz Free Energy Surface')
-
-# plt.show()
 
 
 # Adapted from:
@@ -934,6 +943,15 @@ for i in range(1, n):
     sol_vle = root(fobj_vle, x0=rhoad0, args=(Tad, model),tol = 1e-10)
     rhov[i], rhol[i] = sol_vle.x
 
+##########################################
+# End of code adapted from Gustavo Chaparro
+##########################################
+# Literature VLE EOS data
+
+ROS_EOS_VLE_df = pd.read_csv(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\Lit_Data\RO_EOS_VLE_DATA.txt",delimiter=" ")
+CMO_EOS_VLE_df = pd.read_csv(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\Lit_Data\CMO_EOS_VLE_DATA.txt",delimiter =" ")
+# Literature VLE simulation Dataw
+
 vle_temp_2019_data = np.array([0.4,0.41,0.42,0.43,0.44])
 inverse_gas_density_2019_data = np.array([35.40806914,28.16798258,21.91249159,16.245217,11.06553708])
 inverse_liq_density_2019_data = np.array([1.331229281,1.361101621,1.39302346,1.436343071,1.480891538])
@@ -982,20 +1000,28 @@ liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
 gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
 semi_final_fig, plots = plt.subplots()
 
-plots.scatter(x = vle_densities,y = vle_temperatures,facecolors='none',edgecolors='r', marker='^')
-plots.scatter(density_f,T_sf,facecolors='none',edgecolors='r', marker='^')
-plt.title("VLSE curve with datapoints")
-plt.xlabel("Reduced Density")
-plt.ylabel("Reduced Temperature")
-
-
+plots.scatter(x = vle_densities,y = vle_temperatures,facecolors='none',edgecolors='r', marker='^',label = "Lit' Data")
+# plots.scatter(density_f,T_sf,facecolors='none',edgecolors='r', marker='^')
+# plots.scatter(x=ROS_EOS_VLE_df["rhoV"],y=ROS_EOS_VLE_df["T"])
+# plots.scatter(data = ROS_EOS_VLE_df,x='rhoV',y='T')
 plots.plot(rhov, T, color='k')
 plots.plot(rhol, T, color='k')
 plots.plot(rhoc_model, Tc_model, '*',color='k')
-plots.set_xlim([0, 1.0])
-plots.set_ylim([0.1, 0.6])
-plots.set_xlabel(r'$\mathit{\rho^*}$', style='italic')
-plots.set_ylabel(r"$T^*$",style="italic")
+
+plots.plot(ROS_EOS_VLE_df["rhoV"].values,ROS_EOS_VLE_df["T"].values,label = "RO EOS",color = "m")
+plots.plot(ROS_EOS_VLE_df["rhoL"].values,ROS_EOS_VLE_df["T"].values,label = "RO EOS",color = "m")
+plots.plot(CMO_EOS_VLE_df["rhoV"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "y")
+plots.plot(CMO_EOS_VLE_df["rhoL"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "y")
+plots.set_xlim([0, 0.8])
+plots.set_ylim([0.4, 0.55])
+plots.set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 10)
+plots.set_ylabel(r"$T^*$",style="italic",fontsize = 10)
+
 
 plt.show()
+
+
+
+
+
 
