@@ -27,12 +27,11 @@ class BasicLightning(pl.LightningModule):
     """
     This Neural Network takes the input of density and temperature and predicts the helmholtz free energy.
     """
-    def __init__(self,config):
+    def __init__(self):
         super(BasicLightning,self).__init__() 
-        self.lr = config["lr"]
+        self.lr = 1e-6
         self.batch_size = 6000
-        self.layer_size = config["layer_size"]
-        self.weight_decay_coefficient = config["weight_decay_coefficient"]
+        self.layer_size = 45
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -545,13 +544,19 @@ class BasicLightning(pl.LightningModule):
         return Z
     
     def calculate_dA_drho(self,input):
-        gradients = self.compute_gradient(input)
+        T, rho =  self.extract_T_and_rho(input)
+        zero_densities = torch.zeros_like(rho)
+        input_at_zero_densities = torch.stack((zero_densities,T),dim=-1)
+        gradients = self.compute_gradient(input,input_at_zero_densities)
         dA_drho = gradients[:,0]
         return dA_drho
     
     def calculate_dA_dT(self,input):
-        gradient = self.compute_gradient(input)
-        dA_dT = gradient[:,1]
+        T, rho =  self.extract_T_and_rho(input)
+        zero_densities = torch.zeros_like(rho)
+        input_at_zero_densities = torch.stack((zero_densities,T),dim=-1)
+        gradients = self.compute_gradient(input,input_at_zero_densities)
+        dA_dT = gradients[:,1]
         return dA_dT
     
     def calculate_dP_dT(self,input):
@@ -673,9 +678,9 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TorchTrainer_2023-12-03_17-26-20\training_data_for_current_ANN.txt"
-path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TorchTrainer_2023-12-03_17-26-20\validation_data_for_current_ANN.txt"
-model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\TorchTrainer_2023-12-03_17-26-20\lightning_logs\version_0\checkpoints\epoch=36344-step=908625.ckpt")
+path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\training_data_for_current_ANN.txt"
+path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\validation_data_for_current_ANN.txt"
+model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\lightning_logs\version_0\checkpoints\epoch=52772-step=1319325.ckpt")
 model = model.double()
 # model.eval()
 # data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
@@ -746,15 +751,15 @@ plt.rcParams["mathtext.fontset"] = 'dejavuserif'
 
 #Error heatplot
 fig, ax = plt.subplots()
-
-scatter = ax.scatter(val_arr[:,density_column][~np.isnan(val_arr[:,cv_column])], val_arr[:,temperature_column][~np.isnan(val_arr[:,cv_column])], c=error, cmap='plasma',vmin=0, vmax=1)
+max_error_clipping = 0.4
+scatter = ax.scatter(val_arr[:,density_column][~np.isnan(val_arr[:,cv_column])], val_arr[:,temperature_column][~np.isnan(val_arr[:,cv_column])], c=error, cmap='plasma',vmin=0, vmax=max_error_clipping)
 ax.set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 10)
 ax.set_ylabel(r"$T^*$",style="italic",fontsize = 10)
 ax.set_title('Scatter Plot with Colorbar')
 
 cbar = fig.colorbar(scatter)
 tick_labels = cbar.ax.get_yticklabels()
-tick_labels[-1] = '> 1'
+tick_labels[-1] = '> {}'.format(max_error_clipping)
 cbar.ax.set_yticklabels(tick_labels)
 cbar.set_label('MSE')
 
