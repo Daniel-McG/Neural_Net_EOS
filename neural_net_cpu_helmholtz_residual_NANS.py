@@ -46,9 +46,7 @@ class BasicLightning(pl.LightningModule):
     def __init__(self,config):
         super(BasicLightning,self).__init__() 
         self.lr = config["lr"]
-        self.batch_size = 6000
         self.layer_size = config["layer_size"]
-        self.weight_decay_coefficient = config["weight_decay_coefficient"]
 
         # Creating a sequential stack of Linear layers all of the same width with Tanh activation function 
         self.layers_stack = nn.Sequential(
@@ -589,7 +587,7 @@ def train_func(config):
                    RayTrainReportCallback(),
 
                    # Monitor the validation loss and if its not decreasing for more than 500 epochs, terminate the training.
-                   EarlyStopping(monitor="val_loss",mode="min",patience=500000)
+                   EarlyStopping(monitor="val_loss",mode="min",patience=500)
                    ],
         plugins=[RayLightningEnvironment()],
 
