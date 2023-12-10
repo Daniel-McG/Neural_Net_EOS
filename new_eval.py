@@ -678,20 +678,11 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_training_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\training_data_for_current_ANN.txt"
-path_to_validation_data = r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\validation_data_for_current_ANN.txt"
-model = BasicLightning.load_from_checkpoint(r"C:\Users\Daniel.000\Documents\New_research_project\Neural_Net_EOS\models\LargerModel_24hr\lightning_logs\version_0\checkpoints\epoch=52772-step=1319325.ckpt")
+path_to_training_data = r"models\TorchTrainer_5524c320_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-12-09_12-13-08\training_data_for_current_ANN.txt"
+path_to_validation_data = r"models\TorchTrainer_5524c320_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-12-09_12-13-08\validation_data_for_current_ANN.txt"
+model = BasicLightning.load_from_checkpoint(r"models\TorchTrainer_5524c320_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-12-09_12-13-08\lightning_logs\version_0\checkpoints\epoch=22646-step=566175.ckpt")
 model = model.double()
-# model.eval()
-# data_df = pd.read_csv('cleaned_coallated_results.txt',delimiter=" ")
-# Preprocessing the data
-
-# The data was not MinMax scaled as the gradient and hessian had to be computed wrt the input e.g. temperature , not scaled temperature.
-# It may be possible to write the min max sacaling in PyTorch so that the DAG is retained all the way to the input data but im not sure if
-# the TensorDataset and DataLoader would destroy the DAG.
-# Since the density is already in ~0-1 scale and the temperature is only on a ~0-10 scale, it will be okay.
-# Problems would occur if non-simulated experimental data was used as pressures are typically ~ 100kPa and temperatures ~ 298K,
-# very far from the typical 0-1 range we want for training a neural network
+model.eval()
 
 train_arr = np.loadtxt(path_to_training_data)
 val_arr = np.loadtxt(path_to_validation_data)
@@ -741,28 +732,56 @@ target_betaT = val_arr[:,betaT_column][~np.isnan(val_arr[:,betaT_column])]
 target_mujt = val_arr[:,mu_jt_column][~np.isnan(val_arr[:,mu_jt_column])]
 target_gammaV = val_arr[:,gammaV_column][~np.isnan(val_arr[:,gammaV_column])]
 target_cp = val_arr[:,cp_column][~np.isnan(val_arr[:,cp_column])]
+target_adiabatic_index = target_cp/val_arr[:,cv_column][~np.isnan(val_arr[:,cp_column])]
+predicted_adiabatic_index = predicted_adiabatic_index[~np.isnan(val_arr[:,cp_column])]
+targets = [target_Z,target_U,target_cv,target_cp,target_gammaV,target_betaT,target_alphaP,target_mujt,target_adiabatic_index]
+predicteds = [predicted_z,predicted_U,predicted_cv,predicted_cp,predicted_gammaV,predicted_betaT,predicted_alphaP,predicted_mujt,predicted_adiabatic_index]
 
-error = (predicted_cv-target_cv)**2/target_cv
+import matplotlib 
 sns.set_style('ticks')
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = 'Palatino Linotype'
 plt.rcParams["mathtext.default"] = 'it'
 plt.rcParams["mathtext.fontset"] = 'dejavuserif'
+plt.rcParams.update({'font.size': 14})
 
+plasma_big = matplotlib.colormaps['plasma']
+newcmp = matplotlib.colors.ListedColormap(plasma_big(np.linspace(0.1, 0.8, 128)))
 #Error heatplot
-fig, ax = plt.subplots()
-max_error_clipping = 0.4
-scatter = ax.scatter(val_arr[:,density_column][~np.isnan(val_arr[:,cv_column])], val_arr[:,temperature_column][~np.isnan(val_arr[:,cv_column])], c=error, cmap='plasma',vmin=0, vmax=max_error_clipping)
-ax.set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 10)
-ax.set_ylabel(r"$T^*$",style="italic",fontsize = 10)
-ax.set_title('Scatter Plot with Colorbar')
+figsize=(10, 4)
+fig, ax = plt.subplots(1,2,figsize=figsize,constrained_layout=True)
+fig.get_layout_engine().set(wspace=0.1)
+max_error_clipping = 0.1
+marker_size = 10
+
+error = (target_Z-predicted_z)**2
+scatter = ax[0].scatter(val_arr[:,density_column][~np.isnan(val_arr[:,Z_column])], val_arr[:,temperature_column][~np.isnan(val_arr[:,Z_column])], c=error, cmap=newcmp,norm = matplotlib.colors.LogNorm(vmin = 1e-3),s = marker_size)
+ax[0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+ax[0].set_ylabel(r"$T^*$",style="italic",fontsize = 14)
+ax[0].set(xlim=(0, 1),ylim=(0.35,10))
+ax[0].set_title('(a)')
+
+cbar = fig.colorbar(scatter)
+cbar.ax.get_xaxis().get_major_formatter().labelOnlyBase = False
+tick_labels = cbar.ax.get_yticklabels()
+tick_labels[-1] = '> {}'.format(max_error_clipping)
+cbar.ax.set_yticklabels(tick_labels)
+
+
+error = (target_U-predicted_U)**2
+scatter = ax[1].scatter(val_arr[:,density_column][~np.isnan(val_arr[:,internal_energy_column])], val_arr[:,temperature_column][~np.isnan(val_arr[:,internal_energy_column])], c=error, cmap=newcmp,norm = matplotlib.colors.LogNorm(vmin = 1e-3),s = marker_size)
+ax[1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+ax[1].set_ylabel(r"$T^*$",style="italic",fontsize = 14)
+ax[1].set(xlim=(0, 1),ylim=(0.35,10))
+ax[1].set_title('(b)')
 
 cbar = fig.colorbar(scatter)
 tick_labels = cbar.ax.get_yticklabels()
 tick_labels[-1] = '> {}'.format(max_error_clipping)
 cbar.ax.set_yticklabels(tick_labels)
-cbar.set_label('MSE')
 
+
+plt.savefig("Z_U_error_heatmap.svg")
 plt.show()
 
 
@@ -770,67 +789,67 @@ plt.show()
 
 fig, axs = plt.subplots(2, 5, figsize=(15, 10),constrained_layout=True)
 
-sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0])
-sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0])
+sns.lineplot(x =[0,8],y=[0,8],ax = axs[0, 0], color = "k",)
+sns.scatterplot(x = predicted_z.flatten(),y=target_Z.flatten(), ax = axs[0, 0],alpha =0.2)
 axs[0, 0].set_xlabel('Predicted_Z')
 axs[0, 0].set_ylabel('Target_Z')
 axs[0, 0].set_title('Z_parity')
 
-sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1])
-sns.lineplot(x =[0,14],y=[0,14], ax = axs[0, 1])
+sns.scatterplot(x = predicted_U.flatten(),y = target_U.flatten(), ax = axs[0, 1],alpha =0.2)
+sns.lineplot(x =[-2,20],y=[-2,20], ax = axs[0, 1], color = "k",)
 axs[0, 1].set_xlabel('Predicted_U')
 axs[0, 1].set_ylabel('Target_U')
 axs[0, 1].set_title('U_parity')
 
-sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2])
-sns.lineplot(x =[0,20],y=[0,20], ax = axs[0, 2])
+sns.scatterplot(x = predicted_P.flatten(),y = target_P.flatten(), ax = axs[0, 2],alpha =0.2)
+sns.lineplot(x =[0,65],y=[0,65], ax = axs[0, 2], color = "k",)
 axs[0, 2].set_xlabel('Predicted_P')
 axs[0, 2].set_ylabel('Target_P')
 axs[0, 2].set_title('P_parity')
 
-sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3])
+sns.scatterplot(x=predicted_cv.flatten(),y=target_cv.flatten(), ax = axs[0, 3],alpha =0.2)
 axs[0, 3].set_xlabel('Predicted_cv')
 axs[0, 3].set_ylabel('Target_cv')
 axs[0, 3].set_title('cv_parity')
-sns.lineplot(x =[0,4],y=[0,4], ax = axs[0, 3])
+sns.lineplot(x =[1,6],y=[1,6], ax = axs[0, 3], color = "k",)
 
-# sns.scatterplot(x=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*predicted_betaT.flatten(),y=val_arr[:,density_column][~np.isnan(val_arr[:,betaT_column])]*target_betaT.flatten(), ax = axs[1, 0])
-# sns.lineplot(x=[0,20],y=[0,20], ax = axs[1, 0])
-# axs[1, 0].set_xlabel('Predicted_Rho*betaT')
-# axs[1, 0].set_ylabel('Target_Rho*betaT')
-# axs[1, 0].set_title('Rho*betaT_parity')
-# # axs[1, 0].set_xlim(0,20)
-# # axs[1, 0].set_ylim(0,20)
+sns.scatterplot(x=predicted_betaT.flatten(),y=target_betaT.flatten(), ax = axs[1, 0],alpha =0.2)
+sns.lineplot(x=[0,400],y=[0,400], ax = axs[1, 0], color = "k",)
+axs[1, 0].set_xlabel('Predicted_betaT')
+axs[1, 0].set_ylabel('Target_betaT')
+axs[1, 0].set_title('betaT_parity')
+# axs[1, 0].set_xlim(0,20)
+# axs[1, 0].set_ylim(0,20)
 
-sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4])
+sns.scatterplot(x=predicted_cp.flatten(),y=target_cp.flatten(), ax = axs[0, 4],alpha =0.2)
 axs[0, 4].set_xlabel('predicted_Cp')
 axs[0, 4].set_ylabel('target_Cp')
 axs[0, 4].set_title('Cp_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[0, 4])
+sns.lineplot(x =[1.5,36],y=[1.5,36], ax = axs[0, 4], color = "k",)
 
-sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2])
+sns.scatterplot(x=predicted_alphaP.flatten(),y=target_alphaP.flatten(), ax = axs[1, 2],alpha =0.2)
 axs[1, 2].set_xlabel('Predicted_alphaP')
 axs[1, 2].set_ylabel('Target_alphaP')
 axs[1, 2].set_title('alphaP_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 2])
+sns.lineplot(x =[0,37],y=[0,37], ax = axs[1, 2], color = "k",)
 
-sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1])
+sns.scatterplot(x=predicted_gammaV.flatten(),y=target_gammaV.flatten(), ax = axs[1, 1],alpha =0.2)
 axs[1, 1].set_xlabel('Predicted_gammaV')
 axs[1, 1].set_ylabel('Target_gammaV')
 axs[1, 1].set_title('gammaV_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 1])
+sns.lineplot(x =[-5,10],y=[-5,10], ax = axs[1, 1], color = "k",)
 
-sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3])
+sns.scatterplot(x=predicted_mujt.flatten(),y=target_mujt.flatten(), ax = axs[1, 3],alpha =0.2)
 axs[1, 3].set_xlabel('predicted_mujt')
 axs[1, 3].set_ylabel('target_mujt')
 axs[1, 3].set_title('mujt_parity')
-sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
+sns.lineplot(x =[-1,17],y=[-1,17], ax = axs[1, 3], color = "k",)
 
-# sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4])
-# axs[1, 4].set_xlabel('predicted_Cp/Cv')
-# axs[1, 4].set_ylabel('target_Cp/Cv')
-# axs[1, 4].set_title('Cp/Cv_parity')
-# sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4])
+sns.scatterplot(x=predicted_adiabatic_index.flatten(),y=target_adiabatic_index.flatten(), ax = axs[1, 4],alpha =0.2)
+axs[1, 4].set_xlabel('predicted_Cp/Cv')
+axs[1, 4].set_ylabel('target_Cp/Cv')
+axs[1, 4].set_title('Cp/Cv_parity')
+sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4], color = "k",)
 
 # plt.show()
 
@@ -838,29 +857,43 @@ sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 3])
 
 
 ##########
-# Isotherm
+# Isotherms
 ##########
-crit_isotherm_array = [0.511,0.522]
-isotherm_figure, isotherm_plots = plt.subplots()
+# [0.511,0.522,1.09,3.38]
+crit_isotherm_array = [0.45,0.511,0.522,2.247764,4.504468]
+isotherm_figure, isotherm_plots = plt.subplots(2, 3, figsize=(15, 10),constrained_layout=True)
+i = 0
 for temperature in crit_isotherm_array:
 
+    colour_list = ['r','b','g','m','y']
     def find_closest(array, value, n=100):
         array = np.asarray(array)
         idx = np.argsort(np.abs(array - value))[:n]
         return idx
     
-    index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],temperature,100)
+    # Find the closest points since the MD result temperature isnt numerically exactly the input temperature
+    index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],temperature,50)
+
+    # Exclude datapoints which are within the closest N points but are clearly not from the isotherm
     upper_limit = temperature+0.005
     lower_limit = temperature-0.005
+
     mask = (train_arr[index_of_points_close_to_temp,temperature_column]<upper_limit)&(lower_limit<train_arr[index_of_points_close_to_temp,temperature_column])
     isotherm = train_arr[index_of_points_close_to_temp,:][mask]
- 
+    
+    # Index the isotherm data to get the properties for each plot
     P_isotherm_MD = isotherm[:,pressure_column]
+    cv_isotherm_MD = isotherm[:,cv_column]
+    cp_isotherm_MD = isotherm[:,cp_column]
+    gammaV_isotherm_MD = isotherm[:,gammaV_column]
+    betaT_isotherm_MD = isotherm[:,betaT_column]
+    alphaP_isotherm_MD = isotherm[:,alphaP_column]
+    mu_jt_isotherm_MD = isotherm[:,mu_jt_column]
     density_MD = isotherm[:,density_column]
 
 
-    # Create a numpy array with values from 0 to 1
-    density = torch.linspace(0,0.8, 1000)
+    # Create a numpy array with values from 0 to 0.9
+    density = torch.linspace(0,0.9, 1000)
 
     # Create a numpy array with a constant value
     temperature = torch.full((1000,), temperature)
@@ -868,11 +901,121 @@ for temperature in crit_isotherm_array:
     # Concatenate the two numpy arrays horizontally
     tensor = torch.stack((density, temperature), dim=1).double()
     tensor.requires_grad=True
-    P_isotherm = model.calculate_P(tensor)
-    sns.lineplot(x=density.numpy().flatten(),y=P_isotherm.detach().numpy().flatten(),label="ANN")
-    sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),label = "MD")
-isotherm_plots.set_ylabel(r'$\mathit{P^*}$', style='italic')
-isotherm_plots.set_xlabel(r"$\rho^*$",style="italic")
+    predicted_cv = model.calculate_cv(tensor).detach().numpy()
+    predicted_P = model.calculate_P(tensor).detach().numpy()
+    predicted_alphaP = model.calculate_alphaP(tensor).detach().numpy()
+    predicted_betaT = model.calculate_betaT(tensor).detach().numpy()
+    predicted_mujt = model.calculate_mu_jt(tensor).detach().numpy()
+    predicted_gammaV = model.calculate_gammaV(tensor).detach().numpy()
+    predicted_cp = model.calculate_cp(tensor).detach().numpy()
+
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_cv,ax=isotherm_plots[0,0],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=cv_isotherm_MD.flatten(),ax=isotherm_plots[0,0],color = colour_list[i])
+    isotherm_plots[0,0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    isotherm_plots[0,0].set_ylabel(r'$\mathit{C_v^*}$', style='italic',fontsize = 14)
+
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_cp,ax=isotherm_plots[0,1],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=cp_isotherm_MD.flatten(),ax=isotherm_plots[0,1],color = colour_list[i])
+    isotherm_plots[0,1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    isotherm_plots[0,1].set_ylabel(r'$\mathit{C_p^*}$', style='italic',fontsize = 14)
+    isotherm_plots[0,1].set(ylim=(0,20))
+
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_mujt,ax=isotherm_plots[0,2],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=mu_jt_isotherm_MD.flatten(),ax=isotherm_plots[0,2],color = colour_list[i])
+    isotherm_plots[0,2].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    isotherm_plots[0,2].set_ylabel(r'$\mathit{\mu_JT^*}$', style='italic',fontsize = 14)
+
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_gammaV,ax=isotherm_plots[1,0],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=gammaV_isotherm_MD.flatten(),ax=isotherm_plots[1,0],color = colour_list[i])
+    isotherm_plots[1,0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    isotherm_plots[1,0].set_ylabel(r'$\mathit{\gamma_v^*}$', style='italic',fontsize = 14)
+    isotherm_plots[1,0].set(ylim=(0.0,7.5))
+
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_alphaP,ax=isotherm_plots[1,1],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=alphaP_isotherm_MD.flatten(),ax=isotherm_plots[1,1],color = colour_list[i])
+    isotherm_plots[1,1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    isotherm_plots[1,1].set_ylabel(r'$\mathit{\alpha_p^*}$', style='italic',fontsize = 14)
+    isotherm_plots[1,1].set(ylim=(0,20))
+    sns.lineplot(x=density.numpy().flatten(),y=density.numpy()*predicted_betaT,ax=isotherm_plots[1,2],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=density_MD.flatten()*betaT_isotherm_MD.flatten(),ax=isotherm_plots[1,2],color = colour_list[i])
+    isotherm_plots[1,2].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    isotherm_plots[1,2].set_ylabel(r'$\mathit{\beta_T^*}$', style='italic',fontsize = 14)
+    isotherm_plots[1,2].set(ylim=(0,25))
+    i +=1
+
+plt.show()
+
+figsize = (4, 6)
+gridspec_kw = dict(
+    nrows=2, ncols=1,
+    width_ratios=[1],
+    height_ratios=[3, 1],
+)
+subplot_kw = dict(sharey="row")
+p_isotherm_fig = plt.figure(figsize=figsize, constrained_layout=True)
+P_isotherm_plots = p_isotherm_fig.add_gridspec(**gridspec_kw).subplots(**subplot_kw)
+i = 0
+for temperature in crit_isotherm_array:
+
+    colour_list = ['r','b','g','m','y']
+    def find_closest(array, value, n=100):
+        array = np.asarray(array)
+        idx = np.argsort(np.abs(array - value))[:n]
+        return idx
+    
+    # Find the closest points since the MD result temperature isnt numerically exactly the input temperature
+
+    index_of_points_close_to_temp = find_closest(train_arr[:,temperature_column],temperature,100)
+
+    # Exclude datapoints which are within the closest N points but are clearly not from the isotherm
+    upper_limit = temperature+0.001
+    lower_limit = temperature-0.001
+
+    mask = (train_arr[index_of_points_close_to_temp,temperature_column]<upper_limit)&(lower_limit<train_arr[index_of_points_close_to_temp,temperature_column])
+    isotherm = train_arr[index_of_points_close_to_temp,:][mask]
+    
+    # Index the isotherm data to get the properties for each plot
+    P_isotherm_MD = isotherm[:,pressure_column]
+    cv_isotherm_MD = isotherm[:,cv_column]
+    cp_isotherm_MD = isotherm[:,cp_column]
+    gammaV_isotherm_MD = isotherm[:,gammaV_column]
+    betaT_isotherm_MD = isotherm[:,betaT_column]
+    alphaP_isotherm_MD = isotherm[:,alphaP_column]
+    mu_jt_isotherm_MD = isotherm[:,mu_jt_column]
+    density_MD = isotherm[:,density_column]
+
+
+    # Create a numpy array with values from 0 to 0.9
+    density = torch.linspace(0,0.9, 1000)
+
+    # Create a numpy array with a constant value
+    temperature = torch.full((1000,), temperature)
+
+    # Concatenate the two numpy arrays horizontally
+    tensor = torch.stack((density, temperature), dim=1).double()
+    tensor.requires_grad=True
+    predicted_cv = model.calculate_cv(tensor).detach().numpy()
+    predicted_P = model.calculate_P(tensor).detach().numpy()
+    predicted_alphaP = model.calculate_alphaP(tensor).detach().numpy()
+    predicted_betaT = model.calculate_betaT(tensor).detach().numpy()
+    predicted_mujt = model.calculate_mu_jt(tensor).detach().numpy()
+    predicted_gammaV = model.calculate_gammaV(tensor).detach().numpy()
+    predicted_cp = model.calculate_cp(tensor).detach().numpy()
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_P,ax=P_isotherm_plots[0],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),ax=P_isotherm_plots[0],color = colour_list[i])
+    P_isotherm_plots[0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    P_isotherm_plots[0].set_ylabel(r'$\mathit{P^*}$', style='italic',fontsize = 14)
+    P_isotherm_plots[0].set(ylim=(0,2),xlim=(0,0.9))
+
+    sns.lineplot(x=density.numpy().flatten(),y=predicted_P,ax=P_isotherm_plots[1],color = colour_list[i])
+    sns.scatterplot(x =density_MD.flatten(),y=P_isotherm_MD.flatten(),ax=P_isotherm_plots[1],color = colour_list[i])
+    P_isotherm_plots[1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
+    P_isotherm_plots[1].set_ylabel(r'$\mathit{P^*}$', style='italic',fontsize = 14)
+    P_isotherm_plots[1].set(ylim=(0.02,0.04),xlim=(0,0.9))
+    # isotherm_plots.set_ylabel(r'$\mathit{P^*}$', style='italic')
+    # isotherm_plots.set_xlabel(r"$\rho^*$",style="italic")
+    i += 1
+plt.savefig("Pressure_isotherms.svg")
 plt.show()
 
 
@@ -1005,7 +1148,9 @@ liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
 gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
 semi_final_fig, plots = plt.subplots()
 
-plots.scatter(x = vle_densities,y = vle_temperatures,facecolors='none',edgecolors='r', marker='^',label = "Lit' Data")
+plots.scatter(x = critical_point_density,y = critical_point_temperature,facecolors='r',edgecolors='r', marker='*',zorder=1)
+plots.scatter(x = liq_vle_density[1:-2],y = liq_vle_temp[1:-2],facecolors='none',edgecolors='r', marker='^',zorder=1)
+plots.scatter(x = vle_gas_den[:-2],y = vle_gas_tem[:-2],facecolors='none',edgecolors='r', marker='^',zorder=1)
 # plots.scatter(density_f,T_sf,facecolors='none',edgecolors='r', marker='^')
 # plots.scatter(x=ROS_EOS_VLE_df["rhoV"],y=ROS_EOS_VLE_df["T"])
 # plots.scatter(data = ROS_EOS_VLE_df,x='rhoV',y='T')
@@ -1013,10 +1158,10 @@ plots.plot(rhov, T, color='k')
 plots.plot(rhol, T, color='k')
 plots.plot(rhoc_model, Tc_model, '*',color='k')
 
-plots.plot(ROS_EOS_VLE_df["rhoV"].values,ROS_EOS_VLE_df["T"].values,label = "RO EOS",color = "m")
-plots.plot(ROS_EOS_VLE_df["rhoL"].values,ROS_EOS_VLE_df["T"].values,label = "RO EOS",color = "m")
-plots.plot(CMO_EOS_VLE_df["rhoV"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "y")
-plots.plot(CMO_EOS_VLE_df["rhoL"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "y")
+plots.plot(ROS_EOS_VLE_df["rhoV"].values,ROS_EOS_VLE_df["T"].values,label = "RO EOS",color = "b")
+plots.plot(ROS_EOS_VLE_df["rhoL"].values,ROS_EOS_VLE_df["T"].values,label = "RO EOS",color = "b")
+plots.plot(CMO_EOS_VLE_df["rhoV"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "g")
+plots.plot(CMO_EOS_VLE_df["rhoL"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "g")
 plots.set_xlim([0, 0.8])
 plots.set_ylim([0.4, 0.55])
 plots.set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 10)

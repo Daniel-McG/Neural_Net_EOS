@@ -6,7 +6,7 @@ import sys
 path_to_results = r"PATH/TO/RESULTS"
 Kb = 1 
 
-def difference_in_mean_of_halves(arr):
+def difference_in_std_by_mean_of_halves(arr):
     length_of_array = len(arr)
     mean_of_first_half = np.mean(arr[:length_of_array//2,:],axis=0)
     std_of_first_half = np.std(arr[:length_of_array//2,:],axis=0)
@@ -101,7 +101,7 @@ def compressibility_factor(P,rho,T):
     T_average = np.mean(T)
     return P_average/(rho_average*T_average)
 
-def joule_thompson(rho,T,Cp,alpha_p):
+def joule_thomson(rho,T,Cp,alpha_p):
     T = np.mean(T)
     rho = np.mean(rho)
     JT = (1/(rho*Cp))*(T*alpha_p-1)
@@ -149,7 +149,7 @@ def script(path_to_results):
                                         delimiter=" ",
                                         )
                     data_arr= data_df.to_numpy()
-                    difference_in_means = difference_in_mean_of_halves(data_arr)
+                    difference_in_means = difference_in_std_by_mean_of_halves(data_arr)
 
                     # If the simulatioon has not converged, dont take the results from this file 
                     if (difference_in_means[1]>convergence_criteria["total_energy"] or
@@ -230,7 +230,7 @@ def script(path_to_results):
                                         )
                     data_arr= data_df.to_numpy()
 
-                    difference_in_means = difference_in_mean_of_halves(data_arr)
+                    difference_in_means = difference_in_std_by_mean_of_halves(data_arr)
 
                     # If the simulatioon has not converged, dont take the results from this file 
                     if (difference_in_means[1]>convergence_criteria["total_energy"] or
@@ -272,7 +272,7 @@ def script(path_to_results):
                         cp = isobaric_heat_capacity(enthalpy[:timesteps],number_of_particles,temperature[:timesteps])
                         alpha_p = thermal_expansion_coefficient(enthalpy[:timesteps],temperature[:timesteps],volume[:timesteps],number_of_particles)
                         beta_t = isothermal_compressibility(volume[:timesteps],temperature[:timesteps])
-                        mu_jt = joule_thompson(density[:timesteps],temperature[:timesteps],cp,alpha_p)
+                        mu_jt = joule_thomson(density[:timesteps],temperature[:timesteps],cp,alpha_p)
                         Z = compressibility_factor(pressure[:timesteps],density[:timesteps],temperature[:timesteps])
 
                         cp_list.append(cp)

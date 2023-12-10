@@ -1,7 +1,0 @@
-{
-  "train_loop_config": {
-    "layer_size": 45,
-    "lr": 0.0001058481254244588,
-    "weight_decay_coefficient": 1.021951283370008e-06
-  }
-}
