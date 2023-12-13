@@ -203,7 +203,6 @@ class BasicLightning(pl.LightningModule):
 
         # Calculates the loss
 
-        cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
 
         # Don't perform the loss calculations for any of the properties where the values were deemed non converged from the data collation script
         non_nan_alphaP_index = ~torch.isnan(alphaP_target)
@@ -402,8 +401,6 @@ class BasicLightning(pl.LightningModule):
         adiabatic_index_predicted = cp_predicted/cv_predicted
 
         # Calculates the loss
-
-        cv_predicted = torch.clamp(cv_predicted,0,torch.inf)
 
         # Don't perform the loss calculations for any of the properties where the values were deemed non converged from the data collation script
         non_nan_alphaP_index = ~torch.isnan(alphaP_target)
