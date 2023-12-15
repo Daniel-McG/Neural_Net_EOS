@@ -678,9 +678,9 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_training_data = r"models\TorchTrainer_5524c320_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-12-09_12-13-08\training_data_for_current_ANN.txt"
-path_to_validation_data = r"models\TorchTrainer_5524c320_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-12-09_12-13-08\validation_data_for_current_ANN.txt"
-model = BasicLightning.load_from_checkpoint(r"models\TorchTrainer_5524c320_1_layer_size=45,lr=0.0000,weight_decay_coefficient=0.0000_2023-12-09_12-13-08\lightning_logs\version_0\checkpoints\epoch=22646-step=566175.ckpt")
+path_to_training_data = r"models\training_data_for_current_ANN.txt"
+path_to_validation_data = r"models\validation_data_for_current_ANN.txt"
+model = BasicLightning.load_from_checkpoint(r"models\Model.ckpt")
 model = model.double()
 model.eval()
 
@@ -861,11 +861,12 @@ sns.lineplot(x =[0,10],y=[0,10], ax = axs[1, 4], color = "k",)
 ##########
 # [0.511,0.522,1.09,3.38]
 crit_isotherm_array = [0.45,0.511,0.522,2.247764,4.504468]
-isotherm_figure, isotherm_plots = plt.subplots(2, 3, figsize=(15, 10),constrained_layout=True)
+isotherm_figure, isotherm_plots = plt.subplots(2, 3, figsize=(12, 7),constrained_layout=True)
 i = 0
+plt.rcParams.update({'font.size': 18})
 for temperature in crit_isotherm_array:
 
-    colour_list = ['r','b','g','m','y']
+    colour_list = ['r','b','g','m','k']
     def find_closest(array, value, n=100):
         array = np.asarray(array)
         idx = np.argsort(np.abs(array - value))[:n]
@@ -911,40 +912,51 @@ for temperature in crit_isotherm_array:
 
     sns.lineplot(x=density.numpy().flatten(),y=predicted_cv,ax=isotherm_plots[0,0],color = colour_list[i])
     sns.scatterplot(x =density_MD.flatten(),y=cv_isotherm_MD.flatten(),ax=isotherm_plots[0,0],color = colour_list[i])
-    isotherm_plots[0,0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
-    isotherm_plots[0,0].set_ylabel(r'$\mathit{C_v^*}$', style='italic',fontsize = 14)
-
+    isotherm_plots[0,0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 18)
+    isotherm_plots[0,0].set_ylabel(r'$\mathit{C_v^*}$', style='italic',fontsize = 18)
+    isotherm_plots[0,0].set(ylim=(1,6),xlim=(0,0.9))
+    isotherm_plots[0,0].tick_params(axis="both", labelsize=18)
+    plt.xticks(fontsize=18)
     sns.lineplot(x=density.numpy().flatten(),y=predicted_cp,ax=isotherm_plots[0,1],color = colour_list[i])
     sns.scatterplot(x =density_MD.flatten(),y=cp_isotherm_MD.flatten(),ax=isotherm_plots[0,1],color = colour_list[i])
-    isotherm_plots[0,1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
-    isotherm_plots[0,1].set_ylabel(r'$\mathit{C_p^*}$', style='italic',fontsize = 14)
-    isotherm_plots[0,1].set(ylim=(0,20))
-
+    isotherm_plots[0,1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 18)
+    isotherm_plots[0,1].set_ylabel(r'$\mathit{C_p^*}$', style='italic',fontsize = 18)
+    isotherm_plots[0,1].set(ylim=(0,20),xlim=(0,0.9))
+    isotherm_plots[0,1].tick_params(axis="both", labelsize=18)
+    plt.xticks(fontsize=18)
     sns.lineplot(x=density.numpy().flatten(),y=predicted_mujt,ax=isotherm_plots[0,2],color = colour_list[i])
     sns.scatterplot(x =density_MD.flatten(),y=mu_jt_isotherm_MD.flatten(),ax=isotherm_plots[0,2],color = colour_list[i])
-    isotherm_plots[0,2].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
-    isotherm_plots[0,2].set_ylabel(r'$\mathit{\mu_JT^*}$', style='italic',fontsize = 14)
-
+    isotherm_plots[0,2].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 18)
+    isotherm_plots[0,2].set_ylabel(r'$\mathit{\mu_{JT}^*}$', style='italic',fontsize = 18)
+    isotherm_plots[0,2].set(ylim=(-1.0,12.5),xlim=(0,0.9))
+    isotherm_plots[0,2].tick_params(axis="both", labelsize=18)
+    plt.xticks(fontsize=18)
     sns.lineplot(x=density.numpy().flatten(),y=predicted_gammaV,ax=isotherm_plots[1,0],color = colour_list[i])
     sns.scatterplot(x =density_MD.flatten(),y=gammaV_isotherm_MD.flatten(),ax=isotherm_plots[1,0],color = colour_list[i])
-    isotherm_plots[1,0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
-    isotherm_plots[1,0].set_ylabel(r'$\mathit{\gamma_v^*}$', style='italic',fontsize = 14)
-    isotherm_plots[1,0].set(ylim=(0.0,7.5))
-
+    isotherm_plots[1,0].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 18)
+    isotherm_plots[1,0].set_ylabel(r'$\mathit{\gamma_v^*}$', style='italic',fontsize = 18)
+    isotherm_plots[1,0].set(ylim=(0.0,6.5),xlim=(0,0.9))
+    isotherm_plots[1,0].tick_params(axis="both", labelsize=18)
+    plt.xticks(fontsize=18)
     sns.lineplot(x=density.numpy().flatten(),y=predicted_alphaP,ax=isotherm_plots[1,1],color = colour_list[i])
     sns.scatterplot(x =density_MD.flatten(),y=alphaP_isotherm_MD.flatten(),ax=isotherm_plots[1,1],color = colour_list[i])
-    isotherm_plots[1,1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
-    isotherm_plots[1,1].set_ylabel(r'$\mathit{\alpha_p^*}$', style='italic',fontsize = 14)
-    isotherm_plots[1,1].set(ylim=(0,20))
+    isotherm_plots[1,1].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 18)
+    isotherm_plots[1,1].set_ylabel(r'$\mathit{\alpha_p^*}$', style='italic',fontsize = 18)
+    isotherm_plots[1,1].set(ylim=(-0.5,20),xlim=(0,0.9))
+    isotherm_plots[1,2].tick_params(axis="both", labelsize=18)
+    plt.xticks(fontsize=18)
+
     sns.lineplot(x=density.numpy().flatten(),y=density.numpy()*predicted_betaT,ax=isotherm_plots[1,2],color = colour_list[i])
     sns.scatterplot(x =density_MD.flatten(),y=density_MD.flatten()*betaT_isotherm_MD.flatten(),ax=isotherm_plots[1,2],color = colour_list[i])
-    isotherm_plots[1,2].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 14)
-    isotherm_plots[1,2].set_ylabel(r'$\mathit{\beta_T^*}$', style='italic',fontsize = 14)
-    isotherm_plots[1,2].set(ylim=(0,25))
+    isotherm_plots[1,2].set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 18)
+    isotherm_plots[1,2].set_ylabel(r'$\mathit{\rho^* \beta_T^*}$', style='italic',fontsize = 18)
+    isotherm_plots[1,2].set(ylim=(-0.5,25),xlim=(0.0,0.9))
+    isotherm_plots[1,2].tick_params(axis="both", labelsize=18)
+    plt.xticks(fontsize=18)
     i +=1
-
+plt.savefig("Derivative_properties_isotherms.svg")
 plt.show()
-
+plt.rcParams.update({'font.size': 14})
 figsize = (4, 6)
 gridspec_kw = dict(
     nrows=2, ncols=1,
@@ -957,7 +969,7 @@ P_isotherm_plots = p_isotherm_fig.add_gridspec(**gridspec_kw).subplots(**subplot
 i = 0
 for temperature in crit_isotherm_array:
 
-    colour_list = ['r','b','g','m','y']
+    colour_list = ['r','b','g','m','k']
     def find_closest(array, value, n=100):
         array = np.asarray(array)
         idx = np.argsort(np.abs(array - value))[:n]
@@ -1066,7 +1078,7 @@ def fobj_vle(rhoad,Tad,model):
     fo = np.hstack([np.diff(press), np.diff(chempot)])   
     return fo
 
-# number of points to compute the phase envelope
+# number of points to compute the phase envelop
 n = 200
 rhol = np.zeros(n) # array to store liquid density
 rhov = np.zeros(n) # array to store vapour density
@@ -1090,6 +1102,39 @@ for i in range(1, n):
     rhoad0 = np.array([rhov[i-1], rhol[i-1]])
     sol_vle = root(fobj_vle, x0=rhoad0, args=(Tad, model),tol = 1e-10)
     rhov[i], rhol[i] = sol_vle.x
+
+
+# number of points to compute the phase envelop
+n = 9
+rhol = np.zeros(n) # array to store liquid density
+rhov = np.zeros(n) # array to store vapour density
+T = np.array([0.415,0.425,0.435,0.445,0.450,0.455,0.460,0.465,0.468]) # array with the saturation temperatures
+
+# solving for the first point at a low temperature
+i = 0 
+Tad = np.ones(1)*T[i]
+# initial guesses for the vapour and liquid phase, respectively
+rhoad0 = np.array([1e-5, 0.9])
+sol_vle = root(fobj_vle, x0=[rhoad0], args=(Tad,model))
+rhov[i], rhol[i] = sol_vle.x
+
+print("First point VLE results")
+print("Equilibrium liquid density at T={Tsat}: ".format(Tsat=T[i]), np.round(rhol[i], 5))
+print("Equilibrium vapour density at T={Tsat}: ".format(Tsat=T[i]), np.round(rhov[i], 5))
+
+# solving VLE for other temperatues using previous solution as initial guess
+T_gl = np.array([0.450,0.460,0.470,0.480,0.490,0.495,0.500,0.505,0.515])
+density_gas = np.array([0.030, 0.036, 0.05, 0.053, 0.064, 0.07, 0.09, 0.09, 0.28])
+density_liq = np.array([0.722,0.72,0.70,0.68,0.65,0.65,0.65,0.64,0.43])
+
+for i in range(1, n):
+    Tad = np.ones(1)*T[i]
+    rhoad0 = np.array([rhov[i-1], rhol[i-1]])
+    sol_vle = root(fobj_vle, x0=rhoad0, args=(Tad, model),tol = 1e-10)
+    rhov[i], rhol[i] = sol_vle.x
+print(np.array(rhov)-density_gas)
+print(np.array(rhol)-density_liq)
+
 
 ##########################################
 # End of code adapted from Gustavo Chaparro
@@ -1146,7 +1191,11 @@ vle_temperatures = np.concatenate([vle_gas_tem,vle_liq_tem])
 
 liquid_density_range = np.linspace(min(vle_liq_den),min(density_f),100)
 gas_density_range = np.linspace(min(gas_vle_density),max(gas_vle_density),100)
-semi_final_fig, plots = plt.subplots()
+
+
+figsize=(5, 4)
+
+fig, plots = plt.subplots(constrained_layout=True,figsize=figsize)
 
 plots.scatter(x = critical_point_density,y = critical_point_temperature,facecolors='r',edgecolors='r', marker='*',zorder=1)
 plots.scatter(x = liq_vle_density[1:-2],y = liq_vle_temp[1:-2],facecolors='none',edgecolors='r', marker='^',zorder=1)
@@ -1164,11 +1213,14 @@ plots.plot(CMO_EOS_VLE_df["rhoV"].values,CMO_EOS_VLE_df["T"].values,label = "CMO
 plots.plot(CMO_EOS_VLE_df["rhoL"].values,CMO_EOS_VLE_df["T"].values,label = "CMO EOS",color = "g")
 plots.set_xlim([0, 0.8])
 plots.set_ylim([0.4, 0.55])
-plots.set_xlabel(r'$\mathit{\rho^*}$', style='italic',fontsize = 10)
-plots.set_ylabel(r"$T^*$",style="italic",fontsize = 10)
+plots.set_xlabel(r'$\mathit{\rho^*}$', style='italic')
+plots.set_ylabel(r"$T^*$",style="italic")
+plt.savefig("Predicted_VLE.svg")
 
 
 plt.show()
+
+
 
 
 
