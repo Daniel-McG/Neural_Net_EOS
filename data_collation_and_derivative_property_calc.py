@@ -132,9 +132,6 @@ def script(path_to_results):
     collated_properties = np.zeros(array_size)
     collated_standard_deviations=np.zeros((1,20))
     for (root,dirs,files) in os.walk(path_to_results, topdown=True):
-            # print(path_to_results)
-            # print(root)
-            # print(files)
             derivative_properties_dict = {}
             mean_NVT_results = np.zeros((1,1))
             mean_NPT_results = np.zeros((1,1))
@@ -263,10 +260,9 @@ def script(path_to_results):
                     temperature = data_arr[:,2]
                     pressure = data_arr[:,3]
                     density = data_arr[:,4]
-                    number_of_particles = 2048 #data_arr[:,5]
+                    number_of_particles = 2048 
                     kinetic_energy = data_arr[:,6]
                     potential_energy = data_arr[:,7]
-                    # enthalpy = data_arr[:,8]
                     volume = data_arr[:,9]
 
                     # Redefining enlthalpy
