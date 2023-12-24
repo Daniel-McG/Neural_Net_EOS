@@ -26,19 +26,16 @@ def isochoric_heat_capacity(N,E,T):
     """
     N_mean = np.mean(N)
     dE = (E-np.mean(E))*N_mean
-    T = np.mean(T)
-    cv = np.mean(dE**2)/(Kb*(T**2))
+    T_mean = np.mean(T)
+    cv = np.mean(dE**2)/(Kb*(T_mean**2))
     cv /= N_mean
     return cv
 
 def isobaric_heat_capacity(H,N,T):
     '''
     Calculates the isobarc heat capacity from the results of a NPT ensemble molecuar dynamics simulation
-
-    E: Instantaneous total energy
+    H: Instantaneous Enthalpy
     N: Number of particles
-    P: Instantaneous pressure
-    V: Instantaneous volume
     T: Instantaneous Temperature
     '''
     N_mean = np.mean(N)
@@ -55,6 +52,7 @@ def thermal_expansion_coefficient(H,T,V,N):
     H: Instantaneous enthalpy
     N: Number of particles
     V: Instantaneous volume
+    T: Instantaneous temperature
     '''
     N_mean = np.mean(N)
     dH = (H-np.mean(H))*N_mean
@@ -96,15 +94,29 @@ def thermal_pressure_coefficient(P,PE,rho,T,N):
     return gamma_v
 
 def compressibility_factor(P,rho,T):
+    """
+    Calculates the compressibility factor from the results of an NPT or NVT ensemble
+    P: Instantaneous pressure
+    rho: Instantaneous density
+    T: Instantaneous temperature
+    """ 
     rho_average = np.mean(rho)
     P_average = np.mean(P)
     T_average = np.mean(T)
-    return P_average/(rho_average*T_average)
+    Z = P_average/(rho_average*T_average)
+    return Z 
 
 def joule_thomson(rho,T,Cp,alpha_p):
-    T = np.mean(T)
-    rho = np.mean(rho)
-    JT = (1/(rho*Cp))*(T*alpha_p-1)
+    """
+    Calculates the joule thompson coefficient from the results of an NPT ensemble molecular dynamics simulation
+    rho: instantaneous heat density
+    T: Instantaneous temperature
+    Cp: Ensemble heat capacity
+    Alpha_P: Ensemble thermal expansion coefficient
+    """
+    T_mean = np.mean(T)
+    rho_mean = np.mean(rho)
+    JT = (1/(rho_mean*Cp))*(T_mean*alpha_p-1)
     return JT
 
 def script(path_to_results):
