@@ -1,8 +1,8 @@
 # Neural_Net_EOS
 A repository for the Python code from a 2023 masters research project on neural networks as equations of state.
 ## TODO
-* Clean up unused package imports in scripts
-* Create usage examples
+-[ ] Clean up unused package imports in scripts
+-[ ] Create usage examples
   
 ## File descriptions
 * VLSE_curve_notebook : Notebook used in getting the VLSE curves from the literature data  and generating the input points for the simulation
