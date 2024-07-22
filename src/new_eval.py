@@ -1,4 +1,5 @@
 import torch
+import os
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
@@ -758,9 +759,12 @@ class BasicLightning(pl.LightningModule):
         return d2P_drho2
 
 
-path_to_training_data = r"models\training_data_for_current_ANN.txt"
-path_to_validation_data = r"models\validation_data_for_current_ANN.txt"
-model = BasicLightning.load_from_checkpoint(r"models\Model.ckpt")
+#path_to_training_data = r"models\training_data_for_current_ANN.txt"
+path_to_training_data = os.path.join('Model','training_data_for_current_ANN.txt')
+#path_to_validation_data = r"models\validation_data_for_current_ANN.txt"
+#path_to_validation_data = r"models\validation_data_for_current_ANN.txt"
+path_to_validation_data = os.path.join('Model','validation_data_for_current_ANN.txt')
+model = BasicLightning.load_from_checkpoint(os.path.join("Model","Model.ckpt"))
 model = model.double()
 model.eval()
 
