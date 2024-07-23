@@ -3,6 +3,8 @@ A repository for the Python code from a 2023 masters research project on neural 
 ## TODO
 - [ ] Clean up unused package imports in scripts
 - [ ] Create usage examples
+- [ ] Create tests
+- [ ] Add static typing
   
 ## File descriptions
 * VLSE_curve_notebook : Notebook used in getting the VLSE curves from the literature data  and generating the input points for the simulation
